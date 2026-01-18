@@ -451,6 +451,7 @@
 
     <script>
         let currentTab = 'frf';
+        let lastPulseFreq = null; // Store pulse frequency for dynamic stiffness plot
 
         // SDOF System calculations
         class SDOFSystem {
@@ -1180,9 +1181,51 @@
                         yaxis: 'y'
                     });
 
+                    // Add pulse frequency marker if available
+                    let pulseAnnotations = [];
+                    let pulseShapes = [];
+                    if (lastPulseFreq && lastPulseFreq.freq >= fMin && lastPulseFreq.freq <= fMax) {
+                        // Add marker point at pulse frequency
+                        traces.push({
+                            x: [lastPulseFreq.freq],
+                            y: [lastPulseFreq.kDyn],
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: `fp = ${lastPulseFreq.freq.toFixed(1)} Hz (rp=${lastPulseFreq.rp.toFixed(2)})`,
+                            marker: { color: '#e74c3c', size: 12, symbol: 'circle' },
+                            xaxis: 'x',
+                            yaxis: 'y'
+                        });
+
+                        // Add vertical line at pulse frequency
+                        pulseShapes.push({
+                            type: 'line',
+                            x0: lastPulseFreq.freq,
+                            x1: lastPulseFreq.freq,
+                            y0: 0,
+                            y1: 1,
+                            yref: 'paper',
+                            line: { color: '#e74c3c', dash: 'dot', width: 2 }
+                        });
+
+                        pulseAnnotations.push({
+                            x: Math.log10(lastPulseFreq.freq),
+                            y: 0.52,
+                            yref: 'paper',
+                            text: `fp = ${lastPulseFreq.freq.toFixed(1)} Hz`,
+                            showarrow: false,
+                            font: { color: '#e74c3c', size: 10 }
+                        });
+                    }
+
+                    let titleText = `Dynamic Stiffness K(ω) = F/X | Static k = ${system.stiffness.toExponential(2)} N/m`;
+                    if (lastPulseFreq) {
+                        titleText += ` | |K(ωp)| = ${lastPulseFreq.kDyn.toExponential(2)} N/m @ fp=${lastPulseFreq.freq.toFixed(1)} Hz`;
+                    }
+
                     frfLayout = {
                         ...layout,
-                        title: `Dynamic Stiffness K(ω) = F/X | Static k = ${system.stiffness.toExponential(2)} N/m`,
+                        title: titleText,
                         grid: { rows: 2, columns: 1, pattern: 'independent' },
                         xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
                         yaxis: { ...layout.yaxis, type: 'log', title: 'Dynamic Stiffness (N/m)', domain: [0.55, 1], autorange: true },
@@ -1191,10 +1234,12 @@
                         showlegend: true,
                         legend: { x: 0.5, xanchor: 'center', y: 0.48, yanchor: 'top', orientation: 'h', bgcolor: 'rgba(255,255,255,0.9)' },
                         shapes: [
-                            { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
+                            { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } },
+                            ...pulseShapes
                         ],
                         annotations: [
-                            { x: Math.log10(system.naturalFrequencyHz), y: 1, yref: 'paper', text: `fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`, showarrow: false, yanchor: 'bottom', font: { color: 'red' } }
+                            { x: Math.log10(system.naturalFrequencyHz), y: 1, yref: 'paper', text: `fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`, showarrow: false, yanchor: 'bottom', font: { color: 'red' } },
+                            ...pulseAnnotations
                         ]
                     };
                 } else {
@@ -1352,7 +1397,19 @@
                         title = 'Half-Sine Pulse Response';
                         const pulsePeriod = 2 * halfsinePulseDuration;
                         const pulseFreq = 1 / pulsePeriod;
+
+                        // Dynamic stiffness estimation
+                        const omegaP = 2 * Math.PI * pulseFreq;
+                        const rp = pulseFreq / system.naturalFrequencyHz; // frequency ratio
+                        const kDyn = Math.sqrt(Math.pow(system.stiffness - system.mass * omegaP * omegaP, 2) + Math.pow(system.damping * omegaP, 2));
+                        const xPeakEstimate = peakForce / kDyn; // estimated peak displacement
+                        const xPeakActual = Math.max(...displacement.map(Math.abs));
+
                         subtitle = `Shock = ${shockLevelG} g (${peakAccel.toFixed(1)} m/s²), Duration = ${(halfsinePulseDuration*1000).toFixed(1)} ms, Pulse freq = ${pulseFreq.toFixed(1)} Hz, fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`;
+                        subtitle += ` | rp = ${rp.toFixed(2)}, |K(ωp)| = ${kDyn.toExponential(2)} N/m, x_est = ${(xPeakEstimate*1000).toFixed(2)} mm, x_actual = ${(xPeakActual*1000).toFixed(2)} mm`;
+
+                        // Store pulse frequency for dynamic stiffness plot
+                        lastPulseFreq = { freq: pulseFreq, kDyn: kDyn, rp: rp };
                         break;
                     case 'free':
                         displacement = computeFreeVibration(system, time, initialDisp, initialVel);
