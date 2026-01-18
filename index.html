@@ -847,9 +847,15 @@
                 paper_bgcolor: '#ffffff',
                 plot_bgcolor: '#f8fafc',
                 font: { color: '#2d3748' },
-                xaxis: { gridcolor: '#e2e8f0', zerolinecolor: '#cbd5e0' },
-                yaxis: { gridcolor: '#e2e8f0', zerolinecolor: '#cbd5e0' },
+                xaxis: { gridcolor: '#e2e8f0', zerolinecolor: '#cbd5e0', autorange: true },
+                yaxis: { gridcolor: '#e2e8f0', zerolinecolor: '#cbd5e0', autorange: true },
                 margin: { t: 40, r: 20, b: 50, l: 60 }
+            };
+            const config = {
+                responsive: true,
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                displaylogo: false
             };
 
             if (currentTab === 'frf') {
@@ -883,10 +889,10 @@
                     ...layout,
                     title: 'Frequency Response Function',
                     grid: { rows: 2, columns: 1, pattern: 'independent' },
-                    xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)' },
-                    yaxis: { ...layout.yaxis, title: 'Magnitude (dB)', domain: [0.55, 1] },
-                    xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)' },
-                    yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4] },
+                    xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
+                    yaxis: { ...layout.yaxis, title: 'Magnitude (dB)', domain: [0.55, 1], autorange: true },
+                    xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
+                    yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4], autorange: true },
                     showlegend: false,
                     shapes: [
                         { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
@@ -896,7 +902,7 @@
                     ]
                 };
 
-                Plotly.newPlot(plotDiv, traces, frfLayout);
+                Plotly.newPlot(plotDiv, traces, frfLayout, config);
 
             } else if (currentTab === 'trans') {
                 const fMin = parseFloat(document.getElementById('transFreqMin').value);
@@ -939,13 +945,13 @@
                 const transLayout = {
                     ...layout,
                     title: 'Transmissibility',
-                    xaxis: { ...layout.xaxis, title: 'Frequency (Hz)' },
-                    yaxis: { ...layout.yaxis, title: 'Transmissibility', type: 'log' },
+                    xaxis: { ...layout.xaxis, title: 'Frequency (Hz)', autorange: true },
+                    yaxis: { ...layout.yaxis, title: 'Transmissibility', type: 'log', autorange: true },
                     showlegend: true,
                     legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' }
                 };
 
-                Plotly.newPlot(plotDiv, traces, transLayout);
+                Plotly.newPlot(plotDiv, traces, transLayout, config);
 
             } else if (currentTab === 'time') {
                 const duration = parseFloat(document.getElementById('duration').value);
@@ -1037,8 +1043,8 @@
                 const timeLayout = {
                     ...layout,
                     title: title,
-                    xaxis: { ...layout.xaxis, title: 'Time (s)' },
-                    yaxis: { ...layout.yaxis, title: 'Displacement (m)' },
+                    xaxis: { ...layout.xaxis, title: 'Time (s)', autorange: true },
+                    yaxis: { ...layout.yaxis, title: 'Displacement (m)', autorange: true },
                     showlegend: true,
                     legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                     annotations: subtitle ? [{
@@ -1048,7 +1054,7 @@
                     }] : []
                 };
 
-                Plotly.newPlot(plotDiv, traces, timeLayout);
+                Plotly.newPlot(plotDiv, traces, timeLayout, config);
 
             } else if (currentTab === 'srs') {
                 const pulseType = document.getElementById('pulseType').value;
@@ -1163,10 +1169,10 @@
                         ...layout,
                         title: `Shock Response Spectrum (Q=${Q}, ζ=${dampingRatio.toFixed(3)})`,
                         grid: { rows: 1, columns: 2, pattern: 'independent' },
-                        xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)', domain: [0, 0.55] },
-                        yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)' },
-                        xaxis2: { ...layout.xaxis, title: 'Time (ms)', domain: [0.65, 1] },
-                        yaxis2: { ...layout.yaxis, title: 'Acceleration (g)', anchor: 'x2' },
+                        xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)', domain: [0, 0.55], autorange: true },
+                        yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)', autorange: true },
+                        xaxis2: { ...layout.xaxis, title: 'Time (ms)', domain: [0.65, 1], autorange: true },
+                        yaxis2: { ...layout.yaxis, title: 'Acceleration (g)', anchor: 'x2', autorange: true },
                         showlegend: true,
                         legend: { x: 0.55, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' }
                     };
@@ -1174,14 +1180,14 @@
                     srsLayout = {
                         ...layout,
                         title: `Shock Response Spectrum (Q=${Q}, ζ=${dampingRatio.toFixed(3)})`,
-                        xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)' },
-                        yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)' },
+                        xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)', autorange: true },
+                        yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)', autorange: true },
                         showlegend: true,
                         legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' }
                     };
                 }
 
-                Plotly.newPlot(plotDiv, traces, srsLayout);
+                Plotly.newPlot(plotDiv, traces, srsLayout, config);
             }
         }
 
