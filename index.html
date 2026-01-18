@@ -278,7 +278,7 @@
                 <div class="options-row">
                     <div class="form-group">
                         <label>Response Type</label>
-                        <select id="timeResponseType" onchange="updateTimeOptionsVisibility()">
+                        <select id="timeResponseType" onchange="updateTimeOptionsVisibility(); calculate();">
                             <option value="impulse">Impulse</option>
                             <option value="step">Step</option>
                             <option value="harmonic">Harmonic</option>
@@ -290,18 +290,22 @@
                         <input type="number" id="duration" value="5" step="0.5" min="0.1">
                     </div>
                     <div class="form-group" id="amplitudeGroup">
-                        <label id="amplitudeLabel">Force Amplitude (N)</label>
+                        <label id="amplitudeLabel">Impulse (N·s)</label>
                         <input type="number" id="excitationAmplitude" value="1" step="0.1" min="0.001">
                     </div>
-                </div>
-                <div class="options-row" id="harmonicOptions">
-                    <div class="form-group">
+                    <div class="form-group" id="excitationFreqGroup">
                         <label>Excitation Frequency (Hz)</label>
                         <input type="number" id="excitationFreq" value="1.5" step="0.1" min="0.01">
                     </div>
+                </div>
+                <div class="options-row" id="harmonicInfoRow" style="display:none;">
                     <div class="form-group">
                         <label>Frequency Ratio (ω/ωn)</label>
                         <input type="text" id="freqRatioDisplay" value="—" readonly style="background:#1a1a2e; border-color:#555;">
+                    </div>
+                    <div class="form-group">
+                        <label>At Resonance?</label>
+                        <input type="text" id="resonanceDisplay" value="—" readonly style="background:#1a1a2e; border-color:#555;">
                     </div>
                 </div>
                 <div class="options-row" id="freeVibOptions" style="display:none;">
@@ -761,13 +765,17 @@
 
         function updateTimeOptionsVisibility() {
             const responseType = document.getElementById('timeResponseType').value;
-            const harmonicOptions = document.getElementById('harmonicOptions');
+            const harmonicInfoRow = document.getElementById('harmonicInfoRow');
             const freeVibOptions = document.getElementById('freeVibOptions');
             const amplitudeGroup = document.getElementById('amplitudeGroup');
             const amplitudeLabel = document.getElementById('amplitudeLabel');
+            const excitationFreqGroup = document.getElementById('excitationFreqGroup');
 
-            // Show/hide harmonic-specific options
-            harmonicOptions.style.display = (responseType === 'harmonic') ? 'flex' : 'none';
+            // Show/hide harmonic-specific info row (frequency ratio, resonance)
+            harmonicInfoRow.style.display = (responseType === 'harmonic') ? 'flex' : 'none';
+
+            // Show/hide excitation frequency (only for harmonic)
+            excitationFreqGroup.style.display = (responseType === 'harmonic') ? 'block' : 'none';
 
             // Show/hide free vibration options
             freeVibOptions.style.display = (responseType === 'free') ? 'flex' : 'none';
@@ -788,6 +796,29 @@
                         amplitudeLabel.textContent = 'Force Amplitude (N)';
                         break;
                 }
+            }
+
+            // Update frequency ratio display if harmonic
+            if (responseType === 'harmonic') {
+                try {
+                    const system = getSystem();
+                    const excitationFreq = parseFloat(document.getElementById('excitationFreq').value);
+                    const freqRatio = excitationFreq / system.naturalFrequencyHz;
+                    document.getElementById('freqRatioDisplay').value = freqRatio.toFixed(3);
+
+                    // Check if near resonance (within 10%)
+                    const resonanceDisplay = document.getElementById('resonanceDisplay');
+                    if (Math.abs(freqRatio - 1) < 0.1) {
+                        resonanceDisplay.value = 'YES - Near resonance!';
+                        resonanceDisplay.style.color = '#ff6b6b';
+                    } else if (freqRatio < 1) {
+                        resonanceDisplay.value = 'Below resonance';
+                        resonanceDisplay.style.color = '#888';
+                    } else {
+                        resonanceDisplay.value = 'Above resonance';
+                        resonanceDisplay.style.color = '#888';
+                    }
+                } catch (e) {}
             }
         }
 
@@ -1157,12 +1188,8 @@
 
         // Update frequency ratio display when excitation frequency changes
         document.getElementById('excitationFreq').addEventListener('input', function() {
-            try {
-                const system = getSystem();
-                const excitationFreq = parseFloat(this.value);
-                const freqRatio = excitationFreq / system.naturalFrequencyHz;
-                document.getElementById('freqRatioDisplay').value = freqRatio.toFixed(3);
-            } catch (e) {}
+            updateTimeOptionsVisibility();
+            if (currentTab === 'time') calculate();
         });
 
         // Recalculate when response type changes
