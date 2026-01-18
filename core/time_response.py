@@ -1,273 +1,291 @@
 """Time-domain response calculations for SDOF systems."""
 
 import numpy as np
-from numpy.typing import NDArray
+from typing import Tuple
 from scipy import signal
-
 from .sdof_system import SDOFSystem
 
 
 def compute_impulse_response(
     system: SDOFSystem,
-    time: NDArray[np.floating]
-) -> NDArray[np.floating]:
-    """Compute impulse response h(t) of the SDOF system.
-
+    t_end: float = None,
+    n_points: int = 1000
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute impulse response of SDOF system.
+    
     For underdamped system (ζ < 1):
-        h(t) = (1/mωd) * exp(-ζωn*t) * sin(ωd*t)
-
-    For critically damped (ζ = 1):
-        h(t) = (1/m) * t * exp(-ωn*t)
-
-    For overdamped (ζ > 1):
-        h(t) = (1/mωn√(ζ²-1)) * exp(-ζωn*t) * sinh(ωn√(ζ²-1)*t)
-
+    h(t) = (1/m·ωd) · exp(-ζωn·t) · sin(ωd·t)
+    
     Args:
-        system: SDOF system parameters
-        time: Time array in seconds
-
+        system: SDOFSystem instance
+        t_end: End time (defaults to 5 periods or 5 time constants)
+        n_points: Number of time points
+    
     Returns:
-        Impulse response array (displacement per unit impulse)
+        Tuple of (time array, displacement response)
     """
-    m = system.mass
-    wn = system.natural_frequency
+    omega_n = system.natural_frequency
     zeta = system.damping_ratio
-
-    t = np.asarray(time)
-    h = np.zeros_like(t)
-
-    # Only compute for t >= 0
-    mask = t >= 0
-
-    if system.is_underdamped:
-        wd = system.damped_frequency
-        h[mask] = (1 / (m * wd)) * np.exp(-zeta * wn * t[mask]) * np.sin(wd * t[mask])
-
-    elif system.is_critically_damped:
-        h[mask] = (1 / m) * t[mask] * np.exp(-wn * t[mask])
-
+    m = system.mass
+    
+    # Default end time: 5 periods or 5 time constants
+    if t_end is None:
+        if zeta < 1:
+            period = 2 * np.pi / system.damped_frequency
+            t_end = 5 * period
+        else:
+            # Time constant for overdamped
+            t_end = 5 / (zeta * omega_n)
+    
+    t = np.linspace(0, t_end, n_points)
+    
+    if zeta < 1:  # Underdamped
+        omega_d = system.damped_frequency
+        x = (1 / (m * omega_d)) * np.exp(-zeta * omega_n * t) * np.sin(omega_d * t)
+    elif zeta == 1:  # Critically damped
+        x = (1 / m) * t * np.exp(-omega_n * t)
     else:  # Overdamped
-        wd_imag = wn * np.sqrt(zeta**2 - 1)
-        h[mask] = (1 / (m * wd_imag)) * np.exp(-zeta * wn * t[mask]) * np.sinh(wd_imag * t[mask])
-
-    return h
+        s1 = -omega_n * (zeta + np.sqrt(zeta**2 - 1))
+        s2 = -omega_n * (zeta - np.sqrt(zeta**2 - 1))
+        A = 1 / (m * (s2 - s1))
+        x = A * (np.exp(s2 * t) - np.exp(s1 * t))
+    
+    return t, x
 
 
 def compute_step_response(
     system: SDOFSystem,
-    time: NDArray[np.floating],
-    force_magnitude: float = 1.0
-) -> NDArray[np.floating]:
-    """Compute step response of the SDOF system.
-
+    step_magnitude: float = 1.0,
+    t_end: float = None,
+    n_points: int = 1000
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute step response of SDOF system.
+    
     For underdamped system (ζ < 1):
-        x(t) = (F0/k) * [1 - exp(-ζωn*t) * (cos(ωd*t) + (ζ/√(1-ζ²))*sin(ωd*t))]
-
+    x(t) = (F/k) · [1 - exp(-ζωn·t) · (cos(ωd·t) + (ζωn/ωd)·sin(ωd·t))]
+    
     Args:
-        system: SDOF system parameters
-        time: Time array in seconds
-        force_magnitude: Step force magnitude in N (default 1.0)
-
+        system: SDOFSystem instance
+        step_magnitude: Magnitude of step force
+        t_end: End time
+        n_points: Number of time points
+    
     Returns:
-        Step response array (displacement)
+        Tuple of (time array, displacement response)
     """
-    k = system.stiffness
-    wn = system.natural_frequency
+    omega_n = system.natural_frequency
     zeta = system.damping_ratio
-
-    t = np.asarray(time)
-    x = np.zeros_like(t)
-
+    k = system.stiffness
+    
     # Static deflection
-    x_static = force_magnitude / k
-
-    # Only compute for t >= 0
-    mask = t >= 0
-
-    if system.is_underdamped:
-        wd = system.damped_frequency
-        sqrt_term = np.sqrt(1 - zeta**2)
-        x[mask] = x_static * (
-            1 - np.exp(-zeta * wn * t[mask]) * (
-                np.cos(wd * t[mask]) + (zeta / sqrt_term) * np.sin(wd * t[mask])
-            )
-        )
-
-    elif system.is_critically_damped:
-        x[mask] = x_static * (1 - (1 + wn * t[mask]) * np.exp(-wn * t[mask]))
-
+    x_static = step_magnitude / k
+    
+    # Default end time
+    if t_end is None:
+        if zeta < 1:
+            period = 2 * np.pi / system.damped_frequency
+            t_end = 5 * period
+        else:
+            t_end = 5 / (zeta * omega_n)
+    
+    t = np.linspace(0, t_end, n_points)
+    
+    if zeta < 1:  # Underdamped
+        omega_d = system.damped_frequency
+        envelope_decay = np.exp(-zeta * omega_n * t)
+        oscillation = np.cos(omega_d * t) + (zeta * omega_n / omega_d) * np.sin(omega_d * t)
+        x = x_static * (1 - envelope_decay * oscillation)
+    elif zeta == 1:  # Critically damped
+        x = x_static * (1 - (1 + omega_n * t) * np.exp(-omega_n * t))
     else:  # Overdamped
-        s1 = -wn * (zeta - np.sqrt(zeta**2 - 1))
-        s2 = -wn * (zeta + np.sqrt(zeta**2 - 1))
-        x[mask] = x_static * (
-            1 + (s1 * np.exp(s2 * t[mask]) - s2 * np.exp(s1 * t[mask])) / (s2 - s1)
-        )
-
-    return x
+        sqrt_term = np.sqrt(zeta**2 - 1)
+        s1 = -omega_n * (zeta + sqrt_term)
+        s2 = -omega_n * (zeta - sqrt_term)
+        A = s2 / (s2 - s1)
+        B = s1 / (s1 - s2)
+        x = x_static * (1 + A * np.exp(s1 * t) + B * np.exp(s2 * t))
+    
+    return t, x
 
 
 def compute_harmonic_response(
     system: SDOFSystem,
-    time: NDArray[np.floating],
-    excitation_frequency: float,
+    excitation_freq: float,
     force_amplitude: float = 1.0,
+    t_end: float = None,
+    n_points: int = 1000,
+    freq_unit: str = "rad/s",
     include_transient: bool = True
-) -> NDArray[np.floating]:
-    """Compute response to harmonic excitation F(t) = F0*sin(ωt).
-
-    Steady-state response:
-        x(t) = X*sin(ωt - φ)
-
-    where X = F0 / √[(k-mω²)² + (cω)²]
-    and φ = arctan(cω / (k-mω²))
-
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute response to harmonic excitation F(t) = F0·sin(ω·t).
+    
     Args:
-        system: SDOF system parameters
-        time: Time array in seconds
-        excitation_frequency: Excitation frequency in Hz
-        force_amplitude: Force amplitude in N (default 1.0)
-        include_transient: Include transient response (default True)
-
+        system: SDOFSystem instance
+        excitation_freq: Excitation frequency
+        force_amplitude: Amplitude of excitation force
+        t_end: End time
+        n_points: Number of time points
+        freq_unit: "rad/s" or "hz"
+        include_transient: Include transient response (starts from rest)
+    
     Returns:
-        Displacement response array
+        Tuple of (time, total response, steady-state response)
     """
+    if freq_unit.lower() == "hz":
+        omega = 2 * np.pi * excitation_freq
+    else:
+        omega = excitation_freq
+    
     m = system.mass
     k = system.stiffness
     c = system.damping
-    wn = system.natural_frequency
+    omega_n = system.natural_frequency
     zeta = system.damping_ratio
-
-    omega = 2 * np.pi * excitation_frequency
-    t = np.asarray(time)
-
-    # Steady-state amplitude and phase
-    denom = np.sqrt((k - m * omega**2)**2 + (c * omega)**2)
-    X = force_amplitude / denom
-    phi = np.arctan2(c * omega, k - m * omega**2)
-
+    
+    # Default end time: 10 periods of excitation or natural frequency
+    if t_end is None:
+        period = 2 * np.pi / max(omega, omega_n)
+        t_end = 10 * period
+    
+    t = np.linspace(0, t_end, n_points)
+    
+    # Steady-state response amplitude and phase
+    r = omega / omega_n
+    X0 = force_amplitude / k  # Static deflection
+    
+    denominator = np.sqrt((1 - r**2)**2 + (2 * zeta * r)**2)
+    X = X0 / denominator  # Steady-state amplitude
+    
+    phi = np.arctan2(2 * zeta * r, 1 - r**2)  # Phase lag
+    
     # Steady-state response
     x_steady = X * np.sin(omega * t - phi)
+    
+    if include_transient and zeta < 1:
+        # Transient response (to satisfy zero initial conditions)
+        omega_d = system.damped_frequency
+        
+        # Initial conditions for total response = 0
+        x0 = 0  # Initial displacement
+        v0 = 0  # Initial velocity
+        
+        # At t=0: x_steady(0) = -X·sin(phi)
+        # At t=0: v_steady(0) = X·ω·cos(phi)
+        
+        # Transient must cancel steady-state at t=0
+        A = -(-X * np.sin(-phi))  # = X·sin(phi)
+        # v_transient(0) = -zeta·omega_n·A + omega_d·B = -X·omega·cos(phi)
+        B = (-X * omega * np.cos(-phi) + zeta * omega_n * A) / omega_d
+        
+        x_transient = np.exp(-zeta * omega_n * t) * (A * np.cos(omega_d * t) + B * np.sin(omega_d * t))
+        x_total = x_steady + x_transient
+    else:
+        x_total = x_steady
+    
+    return t, x_total, x_steady
 
-    if not include_transient:
-        return x_steady
 
-    # Add transient response for zero initial conditions
-    # Transient dies out as exp(-ζωn*t)
-    mask = t >= 0
-    x_transient = np.zeros_like(t)
-
-    if system.is_underdamped:
-        wd = system.damped_frequency
-        # Initial conditions to cancel steady-state at t=0
-        x0 = -X * np.sin(-phi)  # x(0) = 0
-        v0 = -X * omega * np.cos(-phi)  # v(0) = 0
-
-        A = x0
-        B = (v0 + zeta * wn * x0) / wd
-
-        x_transient[mask] = np.exp(-zeta * wn * t[mask]) * (
-            A * np.cos(wd * t[mask]) + B * np.sin(wd * t[mask])
-        )
-
-    return x_steady + x_transient
+def compute_envelope(
+    system: SDOFSystem,
+    t: np.ndarray,
+    x0: float = 1.0
+) -> np.ndarray:
+    """Compute the exponential decay envelope for free vibration.
+    
+    Envelope: ±x0·exp(-ζωn·t)
+    
+    Args:
+        system: SDOFSystem instance
+        t: Time array
+        x0: Initial amplitude
+    
+    Returns:
+        Envelope values (positive)
+    """
+    return x0 * np.exp(-system.damping_ratio * system.natural_frequency * t)
 
 
 def compute_free_vibration(
     system: SDOFSystem,
-    time: NDArray[np.floating],
+    time: np.ndarray,
     initial_displacement: float = 1.0,
     initial_velocity: float = 0.0
-) -> NDArray[np.floating]:
-    """Compute free vibration response with initial conditions.
+) -> np.ndarray:
+    """Compute free vibration response with given initial conditions.
 
     Args:
-        system: SDOF system parameters
-        time: Time array in seconds
-        initial_displacement: Initial displacement x(0) in m
-        initial_velocity: Initial velocity v(0) in m/s
+        system: SDOFSystem instance
+        time: Time array
+        initial_displacement: Initial displacement x(0)
+        initial_velocity: Initial velocity x'(0)
 
     Returns:
-        Free vibration response array
+        Displacement array
     """
-    wn = system.natural_frequency
+    omega_n = system.natural_frequency
     zeta = system.damping_ratio
     x0 = initial_displacement
     v0 = initial_velocity
 
-    t = np.asarray(time)
-    x = np.zeros_like(t)
-    mask = t >= 0
-
-    if system.is_underdamped:
-        wd = system.damped_frequency
+    if zeta < 1:  # Underdamped
+        omega_d = system.damped_frequency
         A = x0
-        B = (v0 + zeta * wn * x0) / wd
-
-        x[mask] = np.exp(-zeta * wn * t[mask]) * (
-            A * np.cos(wd * t[mask]) + B * np.sin(wd * t[mask])
-        )
-
-    elif system.is_critically_damped:
+        B = (v0 + zeta * omega_n * x0) / omega_d
+        x = np.exp(-zeta * omega_n * time) * (A * np.cos(omega_d * time) + B * np.sin(omega_d * time))
+    elif np.isclose(zeta, 1.0):  # Critically damped
         A = x0
-        B = v0 + wn * x0
-        x[mask] = (A + B * t[mask]) * np.exp(-wn * t[mask])
-
+        B = v0 + omega_n * x0
+        x = (A + B * time) * np.exp(-omega_n * time)
     else:  # Overdamped
         sqrt_term = np.sqrt(zeta**2 - 1)
-        s1 = wn * (-zeta + sqrt_term)
-        s2 = wn * (-zeta - sqrt_term)
-
-        A = (v0 - s2 * x0) / (s1 - s2)
-        B = (s1 * x0 - v0) / (s1 - s2)
-
-        x[mask] = A * np.exp(s1 * t[mask]) + B * np.exp(s2 * t[mask])
+        s1 = -omega_n * (zeta + sqrt_term)
+        s2 = -omega_n * (zeta - sqrt_term)
+        A = (x0 * s2 - v0) / (s2 - s1)
+        B = (v0 - x0 * s1) / (s2 - s1)
+        x = A * np.exp(s1 * time) + B * np.exp(s2 * time)
 
     return x
 
 
 def decay_envelope(
     system: SDOFSystem,
-    time: NDArray[np.floating],
+    time: np.ndarray,
     initial_amplitude: float = 1.0
-) -> NDArray[np.floating]:
-    """Compute the exponential decay envelope for underdamped response.
+) -> np.ndarray:
+    """Compute the exponential decay envelope for free vibration.
 
-    Envelope: A(t) = A0 * exp(-ζωn*t)
+    Envelope: A0 * exp(-ζωn·t)
 
     Args:
-        system: SDOF system parameters
-        time: Time array in seconds
+        system: SDOFSystem instance
+        time: Time array
         initial_amplitude: Initial amplitude
 
     Returns:
-        Decay envelope array
+        Envelope values (positive)
     """
-    t = np.asarray(time)
-    mask = t >= 0
-    envelope = np.zeros_like(t)
-
-    zeta = system.damping_ratio
-    wn = system.natural_frequency
-
-    envelope[mask] = initial_amplitude * np.exp(-zeta * wn * t[mask])
-
-    return envelope
+    return initial_amplitude * np.exp(-system.damping_ratio * system.natural_frequency * time)
 
 
-def logarithmic_decrement(system: SDOFSystem) -> float:
-    """Calculate the logarithmic decrement δ.
-
-    δ = ln(x_n / x_{n+1}) = 2πζ / √(1-ζ²)
-
-    For small damping: δ ≈ 2πζ
-
-    Args:
-        system: SDOF system
-
+def get_state_space(system: SDOFSystem) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Get state-space representation of SDOF system.
+    
+    State vector: [x, x_dot]
+    Input: Force F
+    Output: Displacement x
+    
     Returns:
-        Logarithmic decrement
+        Tuple of (A, B, C, D) matrices
     """
-    zeta = system.damping_ratio
-    if zeta >= 1.0:
-        return float('inf')
-    return 2 * np.pi * zeta / np.sqrt(1 - zeta**2)
+    m = system.mass
+    k = system.stiffness
+    c = system.damping
+    
+    A = np.array([[0, 1],
+                  [-k/m, -c/m]])
+    B = np.array([[0],
+                  [1/m]])
+    C = np.array([[1, 0]])
+    D = np.array([[0]])
+    
+    return A, B, C, D

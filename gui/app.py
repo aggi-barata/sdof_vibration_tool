@@ -7,14 +7,14 @@ import customtkinter as ctk
 import numpy as np
 
 from core.sdof_system import SDOFSystem
-from core.frequency_response import compute_frf
+from core.frequency_response import compute_frf, magnitude_to_db
 from core.transmissibility import compute_transmissibility, compute_transmissibility_normalized
 from core.time_response import (
     compute_impulse_response,
     compute_step_response,
     compute_harmonic_response,
     compute_free_vibration,
-    decay_envelope
+    decay_envelope,
 )
 from utils.validators import ValidationError
 from utils.export import export_plot, export_frequency_response, export_transmissibility, export_time_response
@@ -106,19 +106,20 @@ class SDOFApp(ctk.CTk):
     def _calculate_frequency_response(self):
         """Calculate and plot frequency response."""
         f_min, f_max, n_points = self.control_panel.get_frequency_range()
-        frequencies = np.logspace(np.log10(f_min), np.log10(f_max), n_points)
+        frequencies_hz = np.logspace(np.log10(f_min), np.log10(f_max), n_points)
 
-        magnitude_db, phase_deg, H = compute_frf(self._system, frequencies)
+        _, magnitude, phase_deg = compute_frf(self._system, frequencies_hz, freq_unit="hz")
+        magnitude_db = magnitude_to_db(magnitude)
 
         self._current_data = {
             "type": "frequency_response",
-            "frequencies": frequencies,
+            "frequencies": frequencies_hz,
             "magnitude_db": magnitude_db,
             "phase_deg": phase_deg
         }
 
         self.plot_panel.plot_frequency_response(
-            frequencies,
+            frequencies_hz,
             magnitude_db,
             phase_deg,
             natural_freq_hz=self._system.natural_frequency_hz
@@ -127,12 +128,12 @@ class SDOFApp(ctk.CTk):
     def _calculate_transmissibility(self):
         """Calculate and plot transmissibility."""
         f_min, f_max, _ = self.control_panel.get_frequency_range()
-        frequencies = np.linspace(f_min, f_max, 500)
+        frequencies_hz = np.linspace(f_min, f_max, 500)
 
         if self.control_panel.get_multi_zeta():
             # Multiple zeta curves
             zeta_values = [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0]
-            r = frequencies / self._system.natural_frequency_hz
+            r = frequencies_hz / self._system.natural_frequency_hz
 
             multi_curves = []
             for z in zeta_values:
@@ -141,28 +142,28 @@ class SDOFApp(ctk.CTk):
 
             self._current_data = {
                 "type": "transmissibility_multi",
-                "frequencies": frequencies,
+                "frequencies": frequencies_hz,
                 "curves": multi_curves
             }
 
             self.plot_panel.plot_transmissibility(
-                frequencies,
+                frequencies_hz,
                 multi_curves[0][1],  # First curve for reference
                 self._system.damping_ratio,
                 natural_freq_hz=self._system.natural_frequency_hz,
                 multi_zeta=multi_curves
             )
         else:
-            transmissibility = compute_transmissibility(self._system, frequencies)
+            _, transmissibility = compute_transmissibility(self._system, frequencies_hz, freq_unit="hz")
 
             self._current_data = {
                 "type": "transmissibility",
-                "frequencies": frequencies,
+                "frequencies": frequencies_hz,
                 "transmissibility": transmissibility
             }
 
             self.plot_panel.plot_transmissibility(
-                frequencies,
+                frequencies_hz,
                 transmissibility,
                 self._system.damping_ratio,
                 natural_freq_hz=self._system.natural_frequency_hz
@@ -173,12 +174,13 @@ class SDOFApp(ctk.CTk):
         params = self.control_panel.get_time_parameters()
         duration = params["duration"]
         n_points = int(duration * 1000)  # 1 ms resolution
-        time = np.linspace(0, duration, n_points)
 
         response_type = params["response_type"]
 
         if response_type == "Impulse":
-            displacement = compute_impulse_response(self._system, time)
+            time, displacement = compute_impulse_response(
+                self._system, t_end=duration, n_points=n_points
+            )
             env = decay_envelope(self._system, time, np.max(np.abs(displacement)))
 
             self._current_data = {
@@ -193,7 +195,9 @@ class SDOFApp(ctk.CTk):
             )
 
         elif response_type == "Step":
-            displacement = compute_step_response(self._system, time)
+            time, displacement = compute_step_response(
+                self._system, t_end=duration, n_points=n_points
+            )
 
             self._current_data = {
                 "type": "time_response",
@@ -206,8 +210,12 @@ class SDOFApp(ctk.CTk):
 
         elif response_type == "Harmonic":
             excitation_freq = params["excitation_freq"]
-            displacement = compute_harmonic_response(
-                self._system, time, excitation_freq
+            time, displacement, _ = compute_harmonic_response(
+                self._system,
+                excitation_freq=excitation_freq,
+                t_end=duration,
+                n_points=n_points,
+                freq_unit="hz"
             )
 
             # Calculate steady-state amplitude
@@ -227,6 +235,7 @@ class SDOFApp(ctk.CTk):
             )
 
         elif response_type == "Free Vibration":
+            time = np.linspace(0, duration, n_points)
             displacement = compute_free_vibration(
                 self._system, time, initial_displacement=1.0, initial_velocity=0.0
             )
