@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDOF Vibration Analysis Tool</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            border-radius: 10px;
+        }
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+        header p {
+            color: #888;
+            font-size: 0.9rem;
+        }
+        .panel {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .input-panel h2, .plot-panel h2 {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: #00d9ff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 1rem;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        .derived-values {
+            background: #0f3460;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .derived-values h3 {
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+            color: #00d9ff;
+        }
+        .derived-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #1a1a2e;
+            font-size: 0.9rem;
+        }
+        .derived-item:last-child {
+            border-bottom: none;
+        }
+        .derived-item .value {
+            color: #00d9ff;
+            font-weight: 500;
+        }
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 10px 15px;
+            background: #0f3460;
+            border: none;
+            border-radius: 5px;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        .tab:hover {
+            background: #1a4a7a;
+        }
+        .tab.active {
+            background: #00d9ff;
+            color: #000;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #00d9ff;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #00b8d9;
+        }
+        .plot-container {
+            height: 500px;
+        }
+        .options-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .options-row .form-group {
+            flex: 1;
+            min-width: 100px;
+            margin-bottom: 0;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+        .srs-info {
+            background: #0a1628;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .srs-info strong {
+            color: #00d9ff;
+        }
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SDOF Vibration Analysis Tool</h1>
+            <p>Single Degree of Freedom System Analysis with Shock Response Spectrum</p>
+        </header>
+
+        <div class="panel input-panel">
+            <h2>System Parameters</h2>
+
+            <div class="form-group">
+                <label>Mass (kg)</label>
+                <input type="number" id="mass" value="10" step="0.1" min="0.001">
+            </div>
+
+            <div class="form-group">
+                <label>Stiffness (N/m)</label>
+                <input type="number" id="stiffness" value="1000" step="1" min="0.001">
+            </div>
+
+            <div class="form-group">
+                <label>Damping Type</label>
+                <select id="dampingType">
+                    <option value="coefficient">Coefficient (N·s/m)</option>
+                    <option value="ratio">Damping Ratio (ζ)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label id="dampingLabel">Damping (N·s/m)</label>
+                <input type="number" id="damping" value="20" step="0.1" min="0">
+            </div>
+
+            <div class="derived-values">
+                <h3>Derived Properties</h3>
+                <div class="derived-item">
+                    <span>ωn (rad/s)</span>
+                    <span class="value" id="omega_n">—</span>
+                </div>
+                <div class="derived-item">
+                    <span>fn (Hz)</span>
+                    <span class="value" id="f_n">—</span>
+                </div>
+                <div class="derived-item">
+                    <span>ζ (damping ratio)</span>
+                    <span class="value" id="zeta">—</span>
+                </div>
+                <div class="derived-item">
+                    <span>ωd (rad/s)</span>
+                    <span class="value" id="omega_d">—</span>
+                </div>
+                <div class="derived-item">
+                    <span>Damping Type</span>
+                    <span class="value" id="dampingTypeDisplay">—</span>
+                </div>
+            </div>
+
+            <button class="btn" onclick="calculate()">Calculate</button>
+        </div>
+
+        <div class="panel plot-panel">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('frf')">Frequency Response</button>
+                <button class="tab" onclick="switchTab('trans')">Transmissibility</button>
+                <button class="tab" onclick="switchTab('time')">Time Response</button>
+                <button class="tab" onclick="switchTab('srs')">Shock Response Spectrum</button>
+            </div>
+
+            <div id="frf-options" class="options-row">
+                <div class="form-group">
+                    <label>Freq min (Hz)</label>
+                    <input type="number" id="freqMin" value="0.1" step="0.1" min="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Freq max (Hz)</label>
+                    <input type="number" id="freqMax" value="100" step="1" min="1">
+                </div>
+            </div>
+
+            <div id="trans-options" class="options-row" style="display:none;">
+                <div class="form-group">
+                    <label>Freq min (Hz)</label>
+                    <input type="number" id="transFreqMin" value="0.1" step="0.1" min="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Freq max (Hz)</label>
+                    <input type="number" id="transFreqMax" value="100" step="1" min="1">
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="multiZeta">
+                    <label for="multiZeta">Show multiple ζ curves</label>
+                </div>
+            </div>
+
+            <div id="time-options" class="options-row" style="display:none;">
+                <div class="form-group">
+                    <label>Response Type</label>
+                    <select id="timeResponseType">
+                        <option value="impulse">Impulse</option>
+                        <option value="step">Step</option>
+                        <option value="harmonic">Harmonic</option>
+                        <option value="free">Free Vibration</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Duration (s)</label>
+                    <input type="number" id="duration" value="5" step="0.5" min="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Excitation freq (Hz)</label>
+                    <input type="number" id="excitationFreq" value="1.5" step="0.1" min="0.1">
+                </div>
+            </div>
+
+            <div id="srs-options" style="display:none;">
+                <div class="srs-info">
+                    <strong>Shock Response Spectrum (SRS)</strong> shows the peak response of SDOF oscillators
+                    with varying natural frequencies when subjected to a transient shock input.
+                </div>
+                <div class="options-row">
+                    <div class="form-group">
+                        <label>Shock Pulse Type</label>
+                        <select id="pulseType">
+                            <option value="half_sine">Half Sine</option>
+                            <option value="versed_sine">Versed Sine (Haversine)</option>
+                            <option value="triangular">Triangular (Isosceles)</option>
+                            <option value="rectangular">Rectangular</option>
+                            <option value="trapezoidal">Trapezoidal</option>
+                            <option value="initial_peak_sawtooth">Initial Peak Sawtooth</option>
+                            <option value="terminal_peak_sawtooth">Terminal Peak Sawtooth</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Pulse Duration (ms)</label>
+                        <input type="number" id="pulseDuration" value="11" step="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Peak Amplitude (g)</label>
+                        <input type="number" id="pulseAmplitude" value="50" step="1" min="1">
+                    </div>
+                </div>
+                <div class="options-row">
+                    <div class="form-group">
+                        <label>SRS Freq min (Hz)</label>
+                        <input type="number" id="srsFreqMin" value="10" step="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>SRS Freq max (Hz)</label>
+                        <input type="number" id="srsFreqMax" value="2000" step="10" min="10">
+                    </div>
+                    <div class="form-group">
+                        <label>SRS Damping (Q)</label>
+                        <input type="number" id="srsDamping" value="10" step="1" min="2">
+                    </div>
+                </div>
+                <div class="options-row">
+                    <div class="form-group">
+                        <label>SRS Type</label>
+                        <select id="srsType">
+                            <option value="maxi_max">Maxi-Max (Absolute Maximum)</option>
+                            <option value="primary">Primary (During Shock)</option>
+                            <option value="residual">Residual (After Shock)</option>
+                            <option value="all">All Components</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="showPulse" checked>
+                        <label for="showPulse">Show input pulse</label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="plot" class="plot-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'frf';
+
+        // SDOF System calculations
+        class SDOFSystem {
+            constructor(mass, stiffness, damping) {
+                this.mass = mass;
+                this.stiffness = stiffness;
+                this.damping = damping;
+            }
+
+            static fromDampingRatio(mass, stiffness, zeta) {
+                const cCritical = 2 * Math.sqrt(stiffness * mass);
+                return new SDOFSystem(mass, stiffness, zeta * cCritical);
+            }
+
+            get naturalFrequency() {
+                return Math.sqrt(this.stiffness / this.mass);
+            }
+
+            get naturalFrequencyHz() {
+                return this.naturalFrequency / (2 * Math.PI);
+            }
+
+            get criticalDamping() {
+                return 2 * Math.sqrt(this.stiffness * this.mass);
+            }
+
+            get dampingRatio() {
+                return this.damping / this.criticalDamping;
+            }
+
+            get dampedFrequency() {
+                const zeta = this.dampingRatio;
+                if (zeta >= 1.0) return 0;
+                return this.naturalFrequency * Math.sqrt(1 - zeta * zeta);
+            }
+
+            get isUnderdamped() {
+                return this.dampingRatio < 1.0;
+            }
+        }
+
+        // Compute FRF
+        function computeFRF(system, frequencies) {
+            const magnitudeDb = [];
+            const phaseDeg = [];
+
+            for (const f of frequencies) {
+                const omega = 2 * Math.PI * f;
+                const m = system.mass;
+                const k = system.stiffness;
+                const c = system.damping;
+
+                const real = k - m * omega * omega;
+                const imag = c * omega;
+                const denomMag = Math.sqrt(real * real + imag * imag);
+
+                const H_mag = 1 / denomMag;
+                magnitudeDb.push(20 * Math.log10(H_mag * k));
+                phaseDeg.push(-Math.atan2(imag, real) * 180 / Math.PI);
+            }
+
+            return { magnitudeDb, phaseDeg };
+        }
+
+        // Compute Transmissibility
+        function computeTransmissibility(zeta, frequencyRatios) {
+            return frequencyRatios.map(r => {
+                const num = 1 + Math.pow(2 * zeta * r, 2);
+                const den = Math.pow(1 - r * r, 2) + Math.pow(2 * zeta * r, 2);
+                return Math.sqrt(num / den);
+            });
+        }
+
+        // Compute impulse response
+        function computeImpulseResponse(system, time) {
+            const m = system.mass;
+            const wn = system.naturalFrequency;
+            const zeta = system.dampingRatio;
+            const wd = system.dampedFrequency;
+
+            return time.map(t => {
+                if (t < 0) return 0;
+                if (system.isUnderdamped) {
+                    return (1 / (m * wd)) * Math.exp(-zeta * wn * t) * Math.sin(wd * t);
+                } else {
+                    return (1 / m) * t * Math.exp(-wn * t);
+                }
+            });
+        }
+
+        // Compute step response
+        function computeStepResponse(system, time) {
+            const k = system.stiffness;
+            const wn = system.naturalFrequency;
+            const zeta = system.dampingRatio;
+            const xStatic = 1 / k;
+
+            return time.map(t => {
+                if (t < 0) return 0;
+                if (system.isUnderdamped) {
+                    const wd = system.dampedFrequency;
+                    const sqrtTerm = Math.sqrt(1 - zeta * zeta);
+                    return xStatic * (1 - Math.exp(-zeta * wn * t) *
+                        (Math.cos(wd * t) + (zeta / sqrtTerm) * Math.sin(wd * t)));
+                } else {
+                    return xStatic * (1 - (1 + wn * t) * Math.exp(-wn * t));
+                }
+            });
+        }
+
+        // Compute harmonic response
+        function computeHarmonicResponse(system, time, excitationFreq) {
+            const m = system.mass;
+            const k = system.stiffness;
+            const c = system.damping;
+            const omega = 2 * Math.PI * excitationFreq;
+
+            const denom = Math.sqrt(Math.pow(k - m * omega * omega, 2) + Math.pow(c * omega, 2));
+            const X = 1 / denom;
+            const phi = Math.atan2(c * omega, k - m * omega * omega);
+
+            return time.map(t => X * Math.sin(omega * t - phi));
+        }
+
+        // Compute free vibration
+        function computeFreeVibration(system, time, x0 = 1, v0 = 0) {
+            const wn = system.naturalFrequency;
+            const zeta = system.dampingRatio;
+            const wd = system.dampedFrequency;
+
+            return time.map(t => {
+                if (t < 0) return 0;
+                if (system.isUnderdamped) {
+                    const A = x0;
+                    const B = (v0 + zeta * wn * x0) / wd;
+                    return Math.exp(-zeta * wn * t) * (A * Math.cos(wd * t) + B * Math.sin(wd * t));
+                } else {
+                    const A = x0;
+                    const B = v0 + wn * x0;
+                    return (A + B * t) * Math.exp(-wn * t);
+                }
+            });
+        }
+
+        // Generate shock pulse
+        function generateShockPulse(pulseType, duration, amplitude, dt) {
+            const totalTime = duration * 10;
+            const n = Math.ceil(totalTime / dt);
+            const t = [];
+            const accel = [];
+
+            for (let i = 0; i < n; i++) {
+                t.push(i * dt);
+                accel.push(0);
+            }
+
+            const pulseSamples = Math.ceil(duration / dt);
+
+            for (let i = 0; i < pulseSamples && i < n; i++) {
+                const tPulse = i * dt;
+
+                switch (pulseType) {
+                    case 'half_sine':
+                        accel[i] = amplitude * Math.sin(Math.PI * tPulse / duration);
+                        break;
+                    case 'versed_sine':
+                        accel[i] = amplitude * (1 - Math.cos(2 * Math.PI * tPulse / duration)) / 2;
+                        break;
+                    case 'triangular':
+                        if (tPulse < duration / 2) {
+                            accel[i] = amplitude * 2 * tPulse / duration;
+                        } else {
+                            accel[i] = amplitude * (2 - 2 * tPulse / duration);
+                        }
+                        break;
+                    case 'rectangular':
+                        accel[i] = amplitude;
+                        break;
+                    case 'trapezoidal':
+                        const riseTime = duration / 4;
+                        const holdEnd = 3 * duration / 4;
+                        if (tPulse < riseTime) {
+                            accel[i] = amplitude * tPulse / riseTime;
+                        } else if (tPulse < holdEnd) {
+                            accel[i] = amplitude;
+                        } else {
+                            accel[i] = amplitude * (1 - (tPulse - holdEnd) / riseTime);
+                        }
+                        break;
+                    case 'initial_peak_sawtooth':
+                        accel[i] = amplitude * (1 - tPulse / duration);
+                        break;
+                    case 'terminal_peak_sawtooth':
+                        accel[i] = amplitude * tPulse / duration;
+                        break;
+                }
+            }
+
+            return { t, accel };
+        }
+
+        // Compute SDOF response using Newmark-beta
+        function computeSDOFResponse(naturalFreq, dampingRatio, baseAccel, dt) {
+            const omega_n = 2 * Math.PI * naturalFreq;
+            const n = baseAccel.length;
+
+            const x = new Array(n).fill(0);
+            const v = new Array(n).fill(0);
+            const a = new Array(n).fill(0);
+
+            a[0] = -baseAccel[0];
+
+            const gamma = 0.5;
+            const beta = 0.25;
+
+            const k_eff = omega_n * omega_n + gamma / (beta * dt) * 2 * dampingRatio * omega_n + 1 / (beta * dt * dt);
+
+            for (let i = 0; i < n - 1; i++) {
+                const p_eff = (-baseAccel[i + 1] +
+                    (1 / (beta * dt * dt)) * x[i] +
+                    (1 / (beta * dt)) * v[i] +
+                    (1 / (2 * beta) - 1) * a[i] +
+                    2 * dampingRatio * omega_n * (
+                        (gamma / (beta * dt)) * x[i] +
+                        (gamma / beta - 1) * v[i] +
+                        dt * (gamma / (2 * beta) - 1) * a[i]
+                    ));
+
+                x[i + 1] = p_eff / k_eff;
+                v[i + 1] = (gamma / (beta * dt)) * (x[i + 1] - x[i]) + (1 - gamma / beta) * v[i] + dt * (1 - gamma / (2 * beta)) * a[i];
+                a[i + 1] = (1 / (beta * dt * dt)) * (x[i + 1] - x[i]) - (1 / (beta * dt)) * v[i] - (1 / (2 * beta) - 1) * a[i];
+            }
+
+            return x;
+        }
+
+        // Compute SRS
+        function computeSRS(baseAccel, dt, frequencies, dampingRatio) {
+            const n_freq = frequencies.length;
+
+            // Find shock end
+            const peakAccel = Math.max(...baseAccel.map(Math.abs));
+            let shockEndIdx = baseAccel.length - 1;
+            for (let i = baseAccel.length - 1; i >= 0; i--) {
+                if (Math.abs(baseAccel[i]) > 0.01 * peakAccel) {
+                    shockEndIdx = i;
+                    break;
+                }
+            }
+
+            const results = {
+                maxi_max: [],
+                primary_pos: [],
+                primary_neg: [],
+                residual_pos: [],
+                residual_neg: []
+            };
+
+            for (let i = 0; i < n_freq; i++) {
+                const fn = frequencies[i];
+                const x = computeSDOFResponse(fn, dampingRatio, baseAccel, dt);
+
+                // Convert to pseudo-acceleration
+                const omega_n = 2 * Math.PI * fn;
+                const response = x.map(xi => omega_n * omega_n * xi);
+
+                // Primary
+                const primary = response.slice(0, shockEndIdx + 1);
+                results.primary_pos.push(Math.max(...primary));
+                results.primary_neg.push(Math.abs(Math.min(...primary)));
+
+                // Residual
+                const residual = response.slice(shockEndIdx + 1);
+                if (residual.length > 0) {
+                    results.residual_pos.push(Math.max(...residual));
+                    results.residual_neg.push(Math.abs(Math.min(...residual)));
+                } else {
+                    results.residual_pos.push(0);
+                    results.residual_neg.push(0);
+                }
+
+                // Maxi-max
+                results.maxi_max.push(Math.max(...response.map(Math.abs)));
+            }
+
+            return results;
+        }
+
+        // Generate arrays
+        function linspace(start, end, n) {
+            const arr = [];
+            const step = (end - start) / (n - 1);
+            for (let i = 0; i < n; i++) {
+                arr.push(start + step * i);
+            }
+            return arr;
+        }
+
+        function logspace(start, end, n) {
+            const logStart = Math.log10(start);
+            const logEnd = Math.log10(end);
+            return linspace(logStart, logEnd, n).map(x => Math.pow(10, x));
+        }
+
+        // UI Functions
+        function getSystem() {
+            const mass = parseFloat(document.getElementById('mass').value);
+            const stiffness = parseFloat(document.getElementById('stiffness').value);
+            const dampingValue = parseFloat(document.getElementById('damping').value);
+            const dampingType = document.getElementById('dampingType').value;
+
+            if (dampingType === 'ratio') {
+                return SDOFSystem.fromDampingRatio(mass, stiffness, dampingValue);
+            }
+            return new SDOFSystem(mass, stiffness, dampingValue);
+        }
+
+        function updateDerivedValues() {
+            try {
+                const system = getSystem();
+                document.getElementById('omega_n').textContent = system.naturalFrequency.toFixed(4);
+                document.getElementById('f_n').textContent = system.naturalFrequencyHz.toFixed(4);
+                document.getElementById('zeta').textContent = system.dampingRatio.toFixed(4);
+                document.getElementById('omega_d').textContent = system.dampedFrequency.toFixed(4);
+
+                if (system.dampingRatio < 1) {
+                    document.getElementById('dampingTypeDisplay').textContent = 'Underdamped';
+                } else if (Math.abs(system.dampingRatio - 1) < 0.001) {
+                    document.getElementById('dampingTypeDisplay').textContent = 'Critically Damped';
+                } else {
+                    document.getElementById('dampingTypeDisplay').textContent = 'Overdamped';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach((t, i) => {
+                t.classList.remove('active');
+                if ((tab === 'frf' && i === 0) || (tab === 'trans' && i === 1) ||
+                    (tab === 'time' && i === 2) || (tab === 'srs' && i === 3)) {
+                    t.classList.add('active');
+                }
+            });
+
+            document.getElementById('frf-options').style.display = tab === 'frf' ? 'flex' : 'none';
+            document.getElementById('trans-options').style.display = tab === 'trans' ? 'flex' : 'none';
+            document.getElementById('time-options').style.display = tab === 'time' ? 'flex' : 'none';
+            document.getElementById('srs-options').style.display = tab === 'srs' ? 'block' : 'none';
+
+            calculate();
+        }
+
+        function calculate() {
+            const system = getSystem();
+            updateDerivedValues();
+
+            const plotDiv = document.getElementById('plot');
+            const layout = {
+                paper_bgcolor: '#16213e',
+                plot_bgcolor: '#0f3460',
+                font: { color: '#eee' },
+                xaxis: { gridcolor: '#333', zerolinecolor: '#555' },
+                yaxis: { gridcolor: '#333', zerolinecolor: '#555' },
+                margin: { t: 40, r: 20, b: 50, l: 60 }
+            };
+
+            if (currentTab === 'frf') {
+                const fMin = parseFloat(document.getElementById('freqMin').value);
+                const fMax = parseFloat(document.getElementById('freqMax').value);
+                const frequencies = logspace(fMin, fMax, 500);
+                const { magnitudeDb, phaseDeg } = computeFRF(system, frequencies);
+
+                const traces = [
+                    {
+                        x: frequencies,
+                        y: magnitudeDb,
+                        type: 'scatter',
+                        name: 'Magnitude',
+                        line: { color: '#00d9ff' },
+                        xaxis: 'x',
+                        yaxis: 'y'
+                    },
+                    {
+                        x: frequencies,
+                        y: phaseDeg,
+                        type: 'scatter',
+                        name: 'Phase',
+                        line: { color: '#ff6b6b' },
+                        xaxis: 'x2',
+                        yaxis: 'y2'
+                    }
+                ];
+
+                const frfLayout = {
+                    ...layout,
+                    title: 'Frequency Response Function',
+                    grid: { rows: 2, columns: 1, pattern: 'independent' },
+                    xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)' },
+                    yaxis: { ...layout.yaxis, title: 'Magnitude (dB)', domain: [0.55, 1] },
+                    xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)' },
+                    yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4] },
+                    showlegend: false,
+                    shapes: [
+                        { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
+                    ],
+                    annotations: [
+                        { x: Math.log10(system.naturalFrequencyHz), y: 1, yref: 'paper', text: `fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`, showarrow: false, yanchor: 'bottom', font: { color: 'red' } }
+                    ]
+                };
+
+                Plotly.newPlot(plotDiv, traces, frfLayout);
+
+            } else if (currentTab === 'trans') {
+                const fMin = parseFloat(document.getElementById('transFreqMin').value);
+                const fMax = parseFloat(document.getElementById('transFreqMax').value);
+                const frequencies = linspace(fMin, fMax, 500);
+                const r = frequencies.map(f => f / system.naturalFrequencyHz);
+                const multiZeta = document.getElementById('multiZeta').checked;
+
+                const traces = [];
+                if (multiZeta) {
+                    const zetaValues = [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0];
+                    const colors = ['#00d9ff', '#00ff88', '#ffff00', '#ff9900', '#ff6b6b', '#cc66ff', '#ffffff'];
+                    zetaValues.forEach((z, i) => {
+                        traces.push({
+                            x: frequencies,
+                            y: computeTransmissibility(z, r),
+                            type: 'scatter',
+                            name: `ζ = ${z}`,
+                            line: { color: colors[i] }
+                        });
+                    });
+                } else {
+                    traces.push({
+                        x: frequencies,
+                        y: computeTransmissibility(system.dampingRatio, r),
+                        type: 'scatter',
+                        name: `ζ = ${system.dampingRatio.toFixed(3)}`,
+                        line: { color: '#00d9ff' }
+                    });
+                }
+
+                traces.push({
+                    x: [fMin, fMax],
+                    y: [1, 1],
+                    type: 'scatter',
+                    name: 'TR = 1',
+                    line: { color: 'yellow', dash: 'dash' }
+                });
+
+                const transLayout = {
+                    ...layout,
+                    title: 'Transmissibility',
+                    xaxis: { ...layout.xaxis, title: 'Frequency (Hz)' },
+                    yaxis: { ...layout.yaxis, title: 'Transmissibility', type: 'log' },
+                    showlegend: true,
+                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                };
+
+                Plotly.newPlot(plotDiv, traces, transLayout);
+
+            } else if (currentTab === 'time') {
+                const duration = parseFloat(document.getElementById('duration').value);
+                const responseType = document.getElementById('timeResponseType').value;
+                const excitationFreq = parseFloat(document.getElementById('excitationFreq').value);
+                const time = linspace(0, duration, 1000);
+
+                let displacement, title;
+
+                switch (responseType) {
+                    case 'impulse':
+                        displacement = computeImpulseResponse(system, time);
+                        title = 'Impulse Response';
+                        break;
+                    case 'step':
+                        displacement = computeStepResponse(system, time);
+                        title = 'Step Response';
+                        break;
+                    case 'harmonic':
+                        displacement = computeHarmonicResponse(system, time, excitationFreq);
+                        title = `Harmonic Response (f = ${excitationFreq} Hz)`;
+                        break;
+                    case 'free':
+                        displacement = computeFreeVibration(system, time);
+                        title = 'Free Vibration (x₀ = 1, v₀ = 0)';
+                        break;
+                }
+
+                const traces = [{
+                    x: time,
+                    y: displacement,
+                    type: 'scatter',
+                    name: 'Response',
+                    line: { color: '#00d9ff' }
+                }];
+
+                if ((responseType === 'free' || responseType === 'impulse') && system.isUnderdamped) {
+                    const maxAmp = Math.max(...displacement.map(Math.abs));
+                    const envelope = time.map(t => maxAmp * Math.exp(-system.dampingRatio * system.naturalFrequency * t));
+                    traces.push({
+                        x: time,
+                        y: envelope,
+                        type: 'scatter',
+                        name: 'Envelope',
+                        line: { color: 'red', dash: 'dash' }
+                    });
+                    traces.push({
+                        x: time,
+                        y: envelope.map(v => -v),
+                        type: 'scatter',
+                        showlegend: false,
+                        line: { color: 'red', dash: 'dash' }
+                    });
+                }
+
+                const timeLayout = {
+                    ...layout,
+                    title: title,
+                    xaxis: { ...layout.xaxis, title: 'Time (s)' },
+                    yaxis: { ...layout.yaxis, title: 'Displacement (m)' },
+                    showlegend: true,
+                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                };
+
+                Plotly.newPlot(plotDiv, traces, timeLayout);
+
+            } else if (currentTab === 'srs') {
+                const pulseType = document.getElementById('pulseType').value;
+                const pulseDuration = parseFloat(document.getElementById('pulseDuration').value) / 1000; // ms to s
+                const pulseAmplitude = parseFloat(document.getElementById('pulseAmplitude').value) * 9.81; // g to m/s²
+                const srsFreqMin = parseFloat(document.getElementById('srsFreqMin').value);
+                const srsFreqMax = parseFloat(document.getElementById('srsFreqMax').value);
+                const Q = parseFloat(document.getElementById('srsDamping').value);
+                const dampingRatio = 1 / (2 * Q);
+                const srsType = document.getElementById('srsType').value;
+                const showPulse = document.getElementById('showPulse').checked;
+
+                // Generate frequencies (1/12 octave spacing typical for SRS)
+                const frequencies = logspace(srsFreqMin, srsFreqMax, 100);
+
+                // Time step for accurate SRS (at least 10 points per cycle at max freq)
+                const dt = 1 / (srsFreqMax * 20);
+
+                // Generate pulse
+                const { t, accel } = generateShockPulse(pulseType, pulseDuration, pulseAmplitude, dt);
+
+                // Compute SRS
+                const srs = computeSRS(accel, dt, frequencies, dampingRatio);
+
+                // Convert back to g's
+                const toG = (arr) => arr.map(v => v / 9.81);
+
+                const traces = [];
+
+                if (srsType === 'all') {
+                    traces.push({
+                        x: frequencies, y: toG(srs.maxi_max),
+                        type: 'scatter', name: 'Maxi-Max',
+                        line: { color: '#00d9ff', width: 2 }
+                    });
+                    traces.push({
+                        x: frequencies, y: toG(srs.primary_pos),
+                        type: 'scatter', name: 'Primary +',
+                        line: { color: '#00ff88' }
+                    });
+                    traces.push({
+                        x: frequencies, y: toG(srs.primary_neg),
+                        type: 'scatter', name: 'Primary -',
+                        line: { color: '#88ff00' }
+                    });
+                    traces.push({
+                        x: frequencies, y: toG(srs.residual_pos),
+                        type: 'scatter', name: 'Residual +',
+                        line: { color: '#ff6b6b' }
+                    });
+                    traces.push({
+                        x: frequencies, y: toG(srs.residual_neg),
+                        type: 'scatter', name: 'Residual -',
+                        line: { color: '#ff8888' }
+                    });
+                } else if (srsType === 'maxi_max') {
+                    traces.push({
+                        x: frequencies, y: toG(srs.maxi_max),
+                        type: 'scatter', name: 'Maxi-Max SRS',
+                        line: { color: '#00d9ff', width: 2 }
+                    });
+                } else if (srsType === 'primary') {
+                    traces.push({
+                        x: frequencies, y: toG(srs.primary_pos),
+                        type: 'scatter', name: 'Primary + SRS',
+                        line: { color: '#00ff88', width: 2 }
+                    });
+                    traces.push({
+                        x: frequencies, y: toG(srs.primary_neg),
+                        type: 'scatter', name: 'Primary - SRS',
+                        line: { color: '#88ff00', width: 2 }
+                    });
+                } else if (srsType === 'residual') {
+                    traces.push({
+                        x: frequencies, y: toG(srs.residual_pos),
+                        type: 'scatter', name: 'Residual + SRS',
+                        line: { color: '#ff6b6b', width: 2 }
+                    });
+                    traces.push({
+                        x: frequencies, y: toG(srs.residual_neg),
+                        type: 'scatter', name: 'Residual - SRS',
+                        line: { color: '#ff8888', width: 2 }
+                    });
+                }
+
+                // Input amplitude reference line
+                traces.push({
+                    x: [srsFreqMin, srsFreqMax],
+                    y: [pulseAmplitude / 9.81, pulseAmplitude / 9.81],
+                    type: 'scatter', name: 'Input Peak',
+                    line: { color: 'yellow', dash: 'dash' }
+                });
+
+                let srsLayout;
+
+                if (showPulse) {
+                    // Show both pulse and SRS
+                    const pulseTimeMs = t.slice(0, Math.ceil(pulseDuration * 3 / dt)).map(ti => ti * 1000);
+                    const pulseAccelG = accel.slice(0, pulseTimeMs.length).map(a => a / 9.81);
+
+                    traces.push({
+                        x: pulseTimeMs,
+                        y: pulseAccelG,
+                        type: 'scatter',
+                        name: 'Input Pulse',
+                        line: { color: '#ffaa00', width: 2 },
+                        xaxis: 'x2',
+                        yaxis: 'y2'
+                    });
+
+                    srsLayout = {
+                        ...layout,
+                        title: `Shock Response Spectrum (Q=${Q}, ζ=${dampingRatio.toFixed(3)})`,
+                        grid: { rows: 1, columns: 2, pattern: 'independent' },
+                        xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)', domain: [0, 0.55] },
+                        yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)' },
+                        xaxis2: { ...layout.xaxis, title: 'Time (ms)', domain: [0.65, 1] },
+                        yaxis2: { ...layout.yaxis, title: 'Acceleration (g)', anchor: 'x2' },
+                        showlegend: true,
+                        legend: { x: 0.55, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                    };
+                } else {
+                    srsLayout = {
+                        ...layout,
+                        title: `Shock Response Spectrum (Q=${Q}, ζ=${dampingRatio.toFixed(3)})`,
+                        xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)' },
+                        yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)' },
+                        showlegend: true,
+                        legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                    };
+                }
+
+                Plotly.newPlot(plotDiv, traces, srsLayout);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('mass').addEventListener('input', updateDerivedValues);
+        document.getElementById('stiffness').addEventListener('input', updateDerivedValues);
+        document.getElementById('damping').addEventListener('input', updateDerivedValues);
+        document.getElementById('dampingType').addEventListener('change', function() {
+            const label = document.getElementById('dampingLabel');
+            const input = document.getElementById('damping');
+            if (this.value === 'ratio') {
+                label.textContent = 'Damping Ratio (ζ)';
+                input.value = '0.1';
+            } else {
+                label.textContent = 'Damping (N·s/m)';
+                input.value = '20';
+            }
+            updateDerivedValues();
+        });
+
+        // Initial calculation
+        updateDerivedValues();
+        calculate();
+    </script>
+</body>
+</html>
