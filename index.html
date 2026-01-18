@@ -319,7 +319,16 @@
                 </div>
                 <div class="options-row">
                     <div class="form-group">
-                        <label>Max Allowable Displacement (m)</label>
+                        <label>Output Type</label>
+                        <select id="outputType" onchange="calculate();">
+                            <option value="displacement">Displacement (m)</option>
+                            <option value="velocity">Velocity (m/s)</option>
+                            <option value="acceleration">Acceleration (m/s²)</option>
+                            <option value="acceleration_g">Acceleration (g)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Max Allowable Value</label>
                         <input type="number" id="maxDisplacement" value="0.1" step="0.01" min="0.001">
                     </div>
                     <div class="checkbox-group" style="margin-top: 0; align-self: flex-end; padding-bottom: 10px;">
@@ -923,6 +932,44 @@
             return linspace(logStart, logEnd, n).map(x => Math.pow(10, x));
         }
 
+        // Compute velocity from displacement using central difference
+        function computeVelocity(displacement, dt) {
+            const n = displacement.length;
+            const velocity = new Array(n).fill(0);
+
+            // Forward difference for first point
+            velocity[0] = (displacement[1] - displacement[0]) / dt;
+
+            // Central difference for interior points
+            for (let i = 1; i < n - 1; i++) {
+                velocity[i] = (displacement[i + 1] - displacement[i - 1]) / (2 * dt);
+            }
+
+            // Backward difference for last point
+            velocity[n - 1] = (displacement[n - 1] - displacement[n - 2]) / dt;
+
+            return velocity;
+        }
+
+        // Compute acceleration from displacement using central difference
+        function computeAcceleration(displacement, dt) {
+            const n = displacement.length;
+            const acceleration = new Array(n).fill(0);
+
+            // Forward difference for first point
+            acceleration[0] = (displacement[2] - 2 * displacement[1] + displacement[0]) / (dt * dt);
+
+            // Central difference for interior points
+            for (let i = 1; i < n - 1; i++) {
+                acceleration[i] = (displacement[i + 1] - 2 * displacement[i] + displacement[i - 1]) / (dt * dt);
+            }
+
+            // Backward difference for last point
+            acceleration[n - 1] = (displacement[n - 1] - 2 * displacement[n - 2] + displacement[n - 3]) / (dt * dt);
+
+            return acceleration;
+        }
+
         // UI Functions
         function getSystem() {
             const mass = parseFloat(document.getElementById('mass').value);
@@ -1246,17 +1293,45 @@
                         break;
                 }
 
+                // Get output type and compute appropriate response
+                const outputType = document.getElementById('outputType').value;
+                const dt = time[1] - time[0];
+                let outputData, yAxisLabel, outputUnit;
+
+                switch (outputType) {
+                    case 'displacement':
+                        outputData = displacement;
+                        yAxisLabel = 'Displacement (m)';
+                        outputUnit = 'm';
+                        break;
+                    case 'velocity':
+                        outputData = computeVelocity(displacement, dt);
+                        yAxisLabel = 'Velocity (m/s)';
+                        outputUnit = 'm/s';
+                        break;
+                    case 'acceleration':
+                        outputData = computeAcceleration(displacement, dt);
+                        yAxisLabel = 'Acceleration (m/s²)';
+                        outputUnit = 'm/s²';
+                        break;
+                    case 'acceleration_g':
+                        outputData = computeAcceleration(displacement, dt).map(a => a / 9.81);
+                        yAxisLabel = 'Acceleration (g)';
+                        outputUnit = 'g';
+                        break;
+                }
+
                 const traces = [{
                     x: time,
-                    y: displacement,
+                    y: outputData,
                     type: 'scatter',
                     name: 'Response',
                     line: { color: '#2c5f7c', width: 2 }
                 }];
 
-                // Add envelope for decaying responses
-                if ((responseType === 'free' || responseType === 'impulse') && system.isUnderdamped) {
-                    const maxAmp = Math.max(...displacement.map(Math.abs));
+                // Add envelope for decaying responses (only for displacement)
+                if ((responseType === 'free' || responseType === 'impulse') && system.isUnderdamped && outputType === 'displacement') {
+                    const maxAmp = Math.max(...outputData.map(Math.abs));
                     const envelope = time.map(t => maxAmp * Math.exp(-system.dampingRatio * system.naturalFrequency * t));
                     traces.push({
                         x: time,
@@ -1274,8 +1349,8 @@
                     });
                 }
 
-                // Add steady-state amplitude lines for harmonic response
-                if (responseType === 'harmonic') {
+                // Add steady-state amplitude lines for harmonic response (only for displacement)
+                if (responseType === 'harmonic' && outputType === 'displacement') {
                     const omega = 2 * Math.PI * excitationFreq;
                     const steadyAmp = amplitude / Math.sqrt(Math.pow(system.stiffness - system.mass * omega * omega, 2) + Math.pow(system.damping * omega, 2));
                     traces.push({
@@ -1294,8 +1369,8 @@
                     });
                 }
 
-                // Add static deflection line for ramp response
-                if (responseType === 'ramp') {
+                // Add static deflection line for ramp response (only for displacement)
+                if (responseType === 'ramp' && outputType === 'displacement') {
                     const staticDeflection = amplitude / system.stiffness;
                     traces.push({
                         x: [time[0], time[time.length-1]],
@@ -1306,23 +1381,23 @@
                     });
                 }
 
-                // Add max allowable displacement constraint lines
+                // Add max allowable value constraint lines
                 const showMaxDisp = document.getElementById('showMaxDisp').checked;
-                const maxAllowableDisp = parseFloat(document.getElementById('maxDisplacement').value);
-                const maxResponseDisp = Math.max(...displacement.map(Math.abs));
-                const exceedsLimit = maxResponseDisp > maxAllowableDisp;
+                const maxAllowableValue = parseFloat(document.getElementById('maxDisplacement').value);
+                const maxResponseValue = Math.max(...outputData.map(Math.abs));
+                const exceedsLimit = maxResponseValue > maxAllowableValue;
 
                 if (showMaxDisp) {
                     traces.push({
                         x: [time[0], time[time.length-1]],
-                        y: [maxAllowableDisp, maxAllowableDisp],
+                        y: [maxAllowableValue, maxAllowableValue],
                         type: 'scatter',
-                        name: `Max limit: ±${maxAllowableDisp} m${exceedsLimit ? ' (EXCEEDED)' : ''}`,
+                        name: `Max limit: ±${maxAllowableValue} ${outputUnit}${exceedsLimit ? ' (EXCEEDED)' : ''}`,
                         line: { color: exceedsLimit ? '#e74c3c' : '#9b59b6', dash: 'dash', width: 2 }
                     });
                     traces.push({
                         x: [time[0], time[time.length-1]],
-                        y: [-maxAllowableDisp, -maxAllowableDisp],
+                        y: [-maxAllowableValue, -maxAllowableValue],
                         type: 'scatter',
                         showlegend: false,
                         line: { color: exceedsLimit ? '#e74c3c' : '#9b59b6', dash: 'dash', width: 2 }
@@ -1331,7 +1406,7 @@
 
                 // Update subtitle to include exceedance warning
                 if (showMaxDisp && exceedsLimit) {
-                    subtitle += ` | ⚠️ MAX EXCEEDED: ${maxResponseDisp.toExponential(2)} m > ${maxAllowableDisp} m`;
+                    subtitle += ` | ⚠️ MAX EXCEEDED: ${maxResponseValue.toExponential(2)} ${outputUnit} > ${maxAllowableValue} ${outputUnit}`;
                 }
 
                 // Add force input trace for ramp, chirp, and halfsine (on secondary y-axis)
@@ -1355,7 +1430,7 @@
                         ...layout,
                         title: title,
                         xaxis: { ...layout.xaxis, title: 'Time (s)', autorange: true },
-                        yaxis: { ...layout.yaxis, title: 'Displacement (m)', autorange: true },
+                        yaxis: { ...layout.yaxis, title: yAxisLabel, autorange: true },
                         showlegend: true,
                         legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                         annotations: subtitle ? [{
@@ -1369,7 +1444,7 @@
                         ...layout,
                         title: title,
                         xaxis: { ...layout.xaxis, title: 'Time (s)', autorange: true },
-                        yaxis: { ...layout.yaxis, title: 'Displacement (m)', autorange: true },
+                        yaxis: { ...layout.yaxis, title: yAxisLabel, autorange: true },
                         showlegend: true,
                         legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                         annotations: subtitle ? [{
