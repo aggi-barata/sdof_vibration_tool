@@ -300,6 +300,7 @@
                             <option value="harmonic">Harmonic</option>
                             <option value="ramp">Ramp Force</option>
                             <option value="chirp">Swept Sine (Chirp)</option>
+                            <option value="halfsine">Half-Sine Pulse</option>
                             <option value="free">Free Vibration</option>
                         </select>
                     </div>
@@ -350,6 +351,12 @@
                     <div class="form-group">
                         <label>End Frequency (Hz)</label>
                         <input type="number" id="chirpEndFreq" value="5" step="0.1" min="0.1">
+                    </div>
+                </div>
+                <div class="options-row" id="halfsineOptions" style="display:none;">
+                    <div class="form-group">
+                        <label>Pulse Duration (ms)</label>
+                        <input type="number" id="halfsinePulseDuration" value="50" step="1" min="1">
                     </div>
                 </div>
             </div>
@@ -665,6 +672,47 @@
             return { displacement: x, force: force };
         }
 
+        // Compute half-sine pulse response using Newmark-beta integration
+        function computeHalfSineResponse(system, time, pulseDuration, forceAmplitude = 1) {
+            const m = system.mass;
+            const k = system.stiffness;
+            const c = system.damping;
+            const dt = time[1] - time[0];
+            const n = time.length;
+
+            // Newmark-beta parameters
+            const gamma = 0.5;
+            const beta = 0.25;
+
+            const x = new Array(n).fill(0);
+            const v = new Array(n).fill(0);
+            const a = new Array(n).fill(0);
+
+            // Half-sine pulse: F(t) = F0 * sin(π*t/T) for 0 <= t <= T, then 0
+            const force = time.map(t => {
+                if (t <= pulseDuration) {
+                    return forceAmplitude * Math.sin(Math.PI * t / pulseDuration);
+                }
+                return 0;
+            });
+
+            a[0] = force[0] / m;
+
+            const kEff = k + gamma / (beta * dt) * c + 1 / (beta * dt * dt) * m;
+
+            for (let i = 0; i < n - 1; i++) {
+                const pEff = force[i + 1] +
+                    m * (1 / (beta * dt * dt) * x[i] + 1 / (beta * dt) * v[i] + (1 / (2 * beta) - 1) * a[i]) +
+                    c * (gamma / (beta * dt) * x[i] + (gamma / beta - 1) * v[i] + dt * (gamma / (2 * beta) - 1) * a[i]);
+
+                x[i + 1] = pEff / kEff;
+                v[i + 1] = gamma / (beta * dt) * (x[i + 1] - x[i]) + (1 - gamma / beta) * v[i] + dt * (1 - gamma / (2 * beta)) * a[i];
+                a[i + 1] = 1 / (beta * dt * dt) * (x[i + 1] - x[i]) - 1 / (beta * dt) * v[i] - (1 / (2 * beta) - 1) * a[i];
+            }
+
+            return { displacement: x, force: force };
+        }
+
         // Generate shock pulse
         function generateShockPulse(pulseType, duration, amplitude, dt) {
             const totalTime = duration * 10;
@@ -905,6 +953,10 @@
             // Show/hide chirp options
             chirpOptions.style.display = (responseType === 'chirp') ? 'flex' : 'none';
 
+            // Show/hide half-sine options
+            const halfsineOptions = document.getElementById('halfsineOptions');
+            halfsineOptions.style.display = (responseType === 'halfsine') ? 'flex' : 'none';
+
             // Update amplitude label and visibility
             if (responseType === 'free') {
                 amplitudeGroup.style.display = 'none';
@@ -925,6 +977,9 @@
                         break;
                     case 'chirp':
                         amplitudeLabel.textContent = 'Force Amplitude (N)';
+                        break;
+                    case 'halfsine':
+                        amplitudeLabel.textContent = 'Peak Force (N)';
                         break;
                 }
             }
@@ -1120,6 +1175,16 @@
                         title = 'Swept Sine (Chirp) Response';
                         subtitle = `F₀ = ${amplitude} N, Freq: ${chirpStartFreq} → ${chirpEndFreq} Hz, fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`;
                         break;
+                    case 'halfsine':
+                        const halfsinePulseDuration = parseFloat(document.getElementById('halfsinePulseDuration').value) / 1000; // ms to s
+                        const halfsineResult = computeHalfSineResponse(system, time, halfsinePulseDuration, amplitude);
+                        displacement = halfsineResult.displacement;
+                        forceData = halfsineResult.force;
+                        title = 'Half-Sine Pulse Response';
+                        const pulsePeriod = 2 * halfsinePulseDuration;
+                        const pulseFreq = 1 / pulsePeriod;
+                        subtitle = `F_peak = ${amplitude} N, Pulse duration = ${(halfsinePulseDuration*1000).toFixed(1)} ms, Pulse freq = ${pulseFreq.toFixed(1)} Hz, fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`;
+                        break;
                     case 'free':
                         displacement = computeFreeVibration(system, time, initialDisp, initialVel);
                         title = 'Free Vibration';
@@ -1187,9 +1252,9 @@
                     });
                 }
 
-                // Add force input trace for ramp and chirp (on secondary y-axis)
+                // Add force input trace for ramp, chirp, and halfsine (on secondary y-axis)
                 let timeLayout;
-                if (forceData && (responseType === 'ramp' || responseType === 'chirp')) {
+                if (forceData && (responseType === 'ramp' || responseType === 'chirp' || responseType === 'halfsine')) {
                     // Normalize force for display
                     const maxForce = Math.max(...forceData.map(Math.abs));
                     const normalizedForce = forceData.map(f => f / maxForce);
