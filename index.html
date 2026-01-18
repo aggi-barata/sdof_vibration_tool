@@ -1182,14 +1182,14 @@
 
                     frfLayout = {
                         ...layout,
-                        title: 'Dynamic Stiffness K(ω) = F/X',
+                        title: `Dynamic Stiffness K(ω) = F/X | Static k = ${system.stiffness.toExponential(2)} N/m`,
                         grid: { rows: 2, columns: 1, pattern: 'independent' },
                         xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
                         yaxis: { ...layout.yaxis, type: 'log', title: 'Dynamic Stiffness (N/m)', domain: [0.55, 1], autorange: true },
                         xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
                         yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4], autorange: true },
                         showlegend: true,
-                        legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                        legend: { x: 0.5, xanchor: 'center', y: 0.48, yanchor: 'top', orientation: 'h', bgcolor: 'rgba(255,255,255,0.9)' },
                         shapes: [
                             { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
                         ],
