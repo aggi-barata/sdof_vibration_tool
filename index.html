@@ -274,23 +274,45 @@
                 </div>
             </div>
 
-            <div id="time-options" class="options-row" style="display:none;">
-                <div class="form-group">
-                    <label>Response Type</label>
-                    <select id="timeResponseType">
-                        <option value="impulse">Impulse</option>
-                        <option value="step">Step</option>
-                        <option value="harmonic">Harmonic</option>
-                        <option value="free">Free Vibration</option>
-                    </select>
+            <div id="time-options" style="display:none;">
+                <div class="options-row">
+                    <div class="form-group">
+                        <label>Response Type</label>
+                        <select id="timeResponseType" onchange="updateTimeOptionsVisibility()">
+                            <option value="impulse">Impulse</option>
+                            <option value="step">Step</option>
+                            <option value="harmonic">Harmonic</option>
+                            <option value="free">Free Vibration</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Duration (s)</label>
+                        <input type="number" id="duration" value="5" step="0.5" min="0.1">
+                    </div>
+                    <div class="form-group" id="amplitudeGroup">
+                        <label id="amplitudeLabel">Force Amplitude (N)</label>
+                        <input type="number" id="excitationAmplitude" value="1" step="0.1" min="0.001">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Duration (s)</label>
-                    <input type="number" id="duration" value="5" step="0.5" min="0.1">
+                <div class="options-row" id="harmonicOptions">
+                    <div class="form-group">
+                        <label>Excitation Frequency (Hz)</label>
+                        <input type="number" id="excitationFreq" value="1.5" step="0.1" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Frequency Ratio (ω/ωn)</label>
+                        <input type="text" id="freqRatioDisplay" value="—" readonly style="background:#1a1a2e; border-color:#555;">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Excitation freq (Hz)</label>
-                    <input type="number" id="excitationFreq" value="1.5" step="0.1" min="0.1">
+                <div class="options-row" id="freeVibOptions" style="display:none;">
+                    <div class="form-group">
+                        <label>Initial Displacement (m)</label>
+                        <input type="number" id="initialDisp" value="1" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Velocity (m/s)</label>
+                        <input type="number" id="initialVel" value="0" step="0.1">
+                    </div>
                 </div>
             </div>
 
@@ -432,7 +454,7 @@
         }
 
         // Compute impulse response
-        function computeImpulseResponse(system, time) {
+        function computeImpulseResponse(system, time, impulse = 1) {
             const m = system.mass;
             const wn = system.naturalFrequency;
             const zeta = system.dampingRatio;
@@ -441,19 +463,19 @@
             return time.map(t => {
                 if (t < 0) return 0;
                 if (system.isUnderdamped) {
-                    return (1 / (m * wd)) * Math.exp(-zeta * wn * t) * Math.sin(wd * t);
+                    return impulse * (1 / (m * wd)) * Math.exp(-zeta * wn * t) * Math.sin(wd * t);
                 } else {
-                    return (1 / m) * t * Math.exp(-wn * t);
+                    return impulse * (1 / m) * t * Math.exp(-wn * t);
                 }
             });
         }
 
         // Compute step response
-        function computeStepResponse(system, time) {
+        function computeStepResponse(system, time, forceAmplitude = 1) {
             const k = system.stiffness;
             const wn = system.naturalFrequency;
             const zeta = system.dampingRatio;
-            const xStatic = 1 / k;
+            const xStatic = forceAmplitude / k;
 
             return time.map(t => {
                 if (t < 0) return 0;
@@ -469,17 +491,37 @@
         }
 
         // Compute harmonic response
-        function computeHarmonicResponse(system, time, excitationFreq) {
+        function computeHarmonicResponse(system, time, excitationFreq, forceAmplitude = 1) {
             const m = system.mass;
             const k = system.stiffness;
             const c = system.damping;
             const omega = 2 * Math.PI * excitationFreq;
 
             const denom = Math.sqrt(Math.pow(k - m * omega * omega, 2) + Math.pow(c * omega, 2));
-            const X = 1 / denom;
+            const X = forceAmplitude / denom;
             const phi = Math.atan2(c * omega, k - m * omega * omega);
 
-            return time.map(t => X * Math.sin(omega * t - phi));
+            // Include transient for zero initial conditions
+            const wn = system.naturalFrequency;
+            const zeta = system.dampingRatio;
+            const wd = system.dampedFrequency;
+
+            return time.map(t => {
+                if (t < 0) return 0;
+                // Steady-state
+                const xSteady = X * Math.sin(omega * t - phi);
+
+                if (!system.isUnderdamped) return xSteady;
+
+                // Transient to satisfy zero initial conditions
+                const x0 = -X * Math.sin(-phi);
+                const v0 = -X * omega * Math.cos(-phi);
+                const A = x0;
+                const B = (v0 + zeta * wn * x0) / wd;
+                const xTransient = Math.exp(-zeta * wn * t) * (A * Math.cos(wd * t) + B * Math.sin(wd * t));
+
+                return xSteady + xTransient;
+            });
         }
 
         // Compute free vibration
@@ -707,10 +749,46 @@
 
             document.getElementById('frf-options').style.display = tab === 'frf' ? 'flex' : 'none';
             document.getElementById('trans-options').style.display = tab === 'trans' ? 'flex' : 'none';
-            document.getElementById('time-options').style.display = tab === 'time' ? 'flex' : 'none';
+            document.getElementById('time-options').style.display = tab === 'time' ? 'block' : 'none';
             document.getElementById('srs-options').style.display = tab === 'srs' ? 'block' : 'none';
 
+            if (tab === 'time') {
+                updateTimeOptionsVisibility();
+            }
+
             calculate();
+        }
+
+        function updateTimeOptionsVisibility() {
+            const responseType = document.getElementById('timeResponseType').value;
+            const harmonicOptions = document.getElementById('harmonicOptions');
+            const freeVibOptions = document.getElementById('freeVibOptions');
+            const amplitudeGroup = document.getElementById('amplitudeGroup');
+            const amplitudeLabel = document.getElementById('amplitudeLabel');
+
+            // Show/hide harmonic-specific options
+            harmonicOptions.style.display = (responseType === 'harmonic') ? 'flex' : 'none';
+
+            // Show/hide free vibration options
+            freeVibOptions.style.display = (responseType === 'free') ? 'flex' : 'none';
+
+            // Update amplitude label and visibility
+            if (responseType === 'free') {
+                amplitudeGroup.style.display = 'none';
+            } else {
+                amplitudeGroup.style.display = 'block';
+                switch (responseType) {
+                    case 'impulse':
+                        amplitudeLabel.textContent = 'Impulse (N·s)';
+                        break;
+                    case 'step':
+                        amplitudeLabel.textContent = 'Force Amplitude (N)';
+                        break;
+                    case 'harmonic':
+                        amplitudeLabel.textContent = 'Force Amplitude (N)';
+                        break;
+                }
+            }
         }
 
         function calculate() {
@@ -826,26 +904,38 @@
                 const duration = parseFloat(document.getElementById('duration').value);
                 const responseType = document.getElementById('timeResponseType').value;
                 const excitationFreq = parseFloat(document.getElementById('excitationFreq').value);
-                const time = linspace(0, duration, 1000);
+                const amplitude = parseFloat(document.getElementById('excitationAmplitude').value);
+                const initialDisp = parseFloat(document.getElementById('initialDisp').value);
+                const initialVel = parseFloat(document.getElementById('initialVel').value);
+                const time = linspace(0, duration, 2000); // More points for better resolution
 
-                let displacement, title;
+                // Update frequency ratio display
+                const freqRatio = excitationFreq / system.naturalFrequencyHz;
+                document.getElementById('freqRatioDisplay').value = freqRatio.toFixed(3);
+
+                let displacement, title, subtitle = '';
 
                 switch (responseType) {
                     case 'impulse':
-                        displacement = computeImpulseResponse(system, time);
+                        displacement = computeImpulseResponse(system, time, amplitude);
                         title = 'Impulse Response';
+                        subtitle = `Impulse = ${amplitude} N·s`;
                         break;
                     case 'step':
-                        displacement = computeStepResponse(system, time);
+                        displacement = computeStepResponse(system, time, amplitude);
                         title = 'Step Response';
+                        subtitle = `F₀ = ${amplitude} N, Static deflection = ${(amplitude/system.stiffness).toExponential(3)} m`;
                         break;
                     case 'harmonic':
-                        displacement = computeHarmonicResponse(system, time, excitationFreq);
-                        title = `Harmonic Response (f = ${excitationFreq} Hz)`;
+                        displacement = computeHarmonicResponse(system, time, excitationFreq, amplitude);
+                        title = `Harmonic Response`;
+                        const steadyAmp = amplitude / Math.sqrt(Math.pow(system.stiffness - system.mass * Math.pow(2*Math.PI*excitationFreq, 2), 2) + Math.pow(system.damping * 2*Math.PI*excitationFreq, 2));
+                        subtitle = `f = ${excitationFreq} Hz (ω/ωn = ${freqRatio.toFixed(3)}), F₀ = ${amplitude} N, Xss = ${steadyAmp.toExponential(3)} m`;
                         break;
                     case 'free':
-                        displacement = computeFreeVibration(system, time);
-                        title = 'Free Vibration (x₀ = 1, v₀ = 0)';
+                        displacement = computeFreeVibration(system, time, initialDisp, initialVel);
+                        title = 'Free Vibration';
+                        subtitle = `x₀ = ${initialDisp} m, v₀ = ${initialVel} m/s`;
                         break;
                 }
 
@@ -857,6 +947,7 @@
                     line: { color: '#00d9ff' }
                 }];
 
+                // Add envelope for decaying responses
                 if ((responseType === 'free' || responseType === 'impulse') && system.isUnderdamped) {
                     const maxAmp = Math.max(...displacement.map(Math.abs));
                     const envelope = time.map(t => maxAmp * Math.exp(-system.dampingRatio * system.naturalFrequency * t));
@@ -876,13 +967,38 @@
                     });
                 }
 
+                // Add steady-state amplitude lines for harmonic response
+                if (responseType === 'harmonic') {
+                    const omega = 2 * Math.PI * excitationFreq;
+                    const steadyAmp = amplitude / Math.sqrt(Math.pow(system.stiffness - system.mass * omega * omega, 2) + Math.pow(system.damping * omega, 2));
+                    traces.push({
+                        x: [time[0], time[time.length-1]],
+                        y: [steadyAmp, steadyAmp],
+                        type: 'scatter',
+                        name: `Steady-state: ±${steadyAmp.toExponential(2)} m`,
+                        line: { color: 'yellow', dash: 'dash' }
+                    });
+                    traces.push({
+                        x: [time[0], time[time.length-1]],
+                        y: [-steadyAmp, -steadyAmp],
+                        type: 'scatter',
+                        showlegend: false,
+                        line: { color: 'yellow', dash: 'dash' }
+                    });
+                }
+
                 const timeLayout = {
                     ...layout,
                     title: title,
                     xaxis: { ...layout.xaxis, title: 'Time (s)' },
                     yaxis: { ...layout.yaxis, title: 'Displacement (m)' },
                     showlegend: true,
-                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' },
+                    annotations: subtitle ? [{
+                        x: 0.5, y: 1.08, xref: 'paper', yref: 'paper',
+                        text: subtitle, showarrow: false,
+                        font: { size: 11, color: '#888' }
+                    }] : []
                 };
 
                 Plotly.newPlot(plotDiv, traces, timeLayout);
@@ -1039,8 +1155,25 @@
             updateDerivedValues();
         });
 
+        // Update frequency ratio display when excitation frequency changes
+        document.getElementById('excitationFreq').addEventListener('input', function() {
+            try {
+                const system = getSystem();
+                const excitationFreq = parseFloat(this.value);
+                const freqRatio = excitationFreq / system.naturalFrequencyHz;
+                document.getElementById('freqRatioDisplay').value = freqRatio.toFixed(3);
+            } catch (e) {}
+        });
+
+        // Recalculate when response type changes
+        document.getElementById('timeResponseType').addEventListener('change', function() {
+            updateTimeOptionsVisibility();
+            if (currentTab === 'time') calculate();
+        });
+
         // Initial calculation
         updateDerivedValues();
+        updateTimeOptionsVisibility();
         calculate();
     </script>
 </body>
