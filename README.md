@@ -13,17 +13,22 @@ Bode plot showing magnitude (dB) and phase response across frequency range. Disp
 Force/displacement transmissibility vs frequency with optional multi-damping ratio overlay. Shows the classic √2 crossover point.
 
 ### Time Response
-Multiple excitation types with Newmark-beta numerical integration:
+Multiple excitation types with analytical solutions and Newmark-beta numerical integration:
 
-| Response Type | Description |
-|---------------|-------------|
-| **Impulse** | Response to instantaneous impulse, shows decay envelope |
-| **Step** | Response to sudden constant force application |
-| **Harmonic** | Steady-state + transient response to sinusoidal excitation |
-| **Ramp Force** | Linear force ramp to constant value |
-| **Swept Sine (Chirp)** | Frequency sweep for resonance identification |
-| **Half-Sine Pulse** | Shock pulse response with configurable duration |
-| **Free Vibration** | Natural response from initial conditions |
+| Response Type | Description | Input |
+|---------------|-------------|-------|
+| **Impulse** | Response to instantaneous impulse, shows decay envelope | Impulse (N·s) |
+| **Step** | Response to sudden constant force application | Force (N) |
+| **Harmonic** | Steady-state + transient response to sinusoidal excitation | Force (N), Frequency (Hz) |
+| **Ramp Force** | Linear force ramp to constant value | Force (N), Ramp time (s) |
+| **Swept Sine (Chirp)** | Frequency sweep for resonance identification | Force (N), Start/End freq (Hz) |
+| **Half-Sine Pulse** | Shock pulse response with configurable duration | Shock level (g), Duration (ms) |
+| **Free Vibration** | Natural response from initial conditions | x₀ (m), v₀ (m/s) |
+
+#### Design Constraint
+- **Max Allowable Displacement**: Set a displacement limit to verify design compliance
+- Visual indication when response exceeds the limit (lines turn red)
+- Warning displayed in plot subtitle with actual vs. allowable values
 
 ### Shock Response Spectrum (SRS)
 Analyze peak response of oscillators across frequency range when subjected to transient shock. Supports maxi-max, primary, and residual spectra.
@@ -42,6 +47,16 @@ Analyze peak response of oscillators across frequency range when subjected to tr
 - Damped frequency: ωd
 - Damping classification (underdamped/critically damped/overdamped)
 
+## Damping Regimes
+
+The tool properly handles all three damping regimes:
+
+| Regime | Condition | Behavior |
+|--------|-----------|----------|
+| **Underdamped** | ζ < 1 | Oscillatory decay with damped frequency ωd = ωn√(1-ζ²) |
+| **Critically Damped** | ζ = 1 | Fastest non-oscillatory return to equilibrium |
+| **Overdamped** | ζ > 1 | Slow non-oscillatory decay (two real exponential terms) |
+
 ## Key Equations
 
 **Natural Frequency:**
@@ -57,7 +72,7 @@ fn = ωn / 2π
 
 **Damped Frequency:**
 ```
-ωd = ωn√(1 - ζ²)
+ωd = ωn√(1 - ζ²)    (for ζ < 1)
 ```
 
 **Frequency Response Function:**
@@ -95,8 +110,9 @@ Standard value: Q = 10 (ζ = 0.05)
 1. Enter system parameters (mass, stiffness, damping)
 2. Select analysis type from tabs
 3. Configure analysis-specific options
-4. Click "Calculate" to generate plots
-5. Use plot toolbar to zoom, pan, reset axes, or export
+4. Set max allowable displacement constraint (optional)
+5. Click "Calculate" to generate plots
+6. Use plot toolbar to zoom, pan, reset axes, or export
 
 ## Local Development
 
@@ -107,7 +123,10 @@ The tool also includes Python backend modules in `/core` for numerical computati
 ## Technical Details
 
 - **Frontend:** Vanilla JavaScript with Plotly.js for interactive plotting
-- **Numerical Methods:** Newmark-beta integration (average acceleration method) for time-domain analysis
+- **Numerical Methods:**
+  - Analytical solutions for impulse, step, harmonic, and free vibration
+  - Newmark-beta integration (average acceleration method) for ramp, chirp, and half-sine pulse
+- **Damping:** Full support for underdamped, critically damped, and overdamped systems
 - **No dependencies:** Runs entirely in the browser
 
 ## License
