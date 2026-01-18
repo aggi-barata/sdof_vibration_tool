@@ -234,6 +234,122 @@ Where:
 
 The response is computed using Newmark-β numerical integration.
 
+### 5.6 Dynamic Stiffness Approach for Half-Sine Pulse Estimation
+
+The dynamic stiffness concept provides a frequency-domain perspective for estimating the peak response to transient shock inputs like half-sine pulses.
+
+#### 5.6.1 Pulse Characterization
+
+A half-sine pulse has a characteristic frequency corresponding to its duration:
+
+```
+ωp = π/τ  [rad/s]
+fp = 1/(2τ)  [Hz]
+```
+
+The pulse can be viewed as a half-cycle of a sinusoidal force at frequency fp.
+
+#### 5.6.2 Equivalent Force
+
+For base acceleration input, the equivalent inertial force on the mass is:
+
+```
+F(t) = m·a(t) = m·A₀·sin(πt/τ)
+
+Peak force: Fpeak = m·A₀
+```
+
+#### 5.6.3 Dynamic Stiffness at Pulse Frequency
+
+The dynamic stiffness evaluated at the pulse frequency ωp = π/τ:
+
+```
+|K(ωp)| = √[(k - m·ωp²)² + (c·ωp)²]
+```
+
+In terms of frequency ratio rp = ωp/ωn = fp/fn:
+
+```
+|K(ωp)| = k·√[(1 - rp²)² + (2ζrp)²]
+```
+
+#### 5.6.4 Peak Displacement Estimate
+
+The peak displacement can be estimated using the dynamic stiffness:
+
+```
+xpeak ≈ Fpeak/|K(ωp)| · DSF
+```
+
+Where DSF is the Dynamic Shock Factor that accounts for the transient nature of the pulse (typically 1.0 to 2.0 depending on rp).
+
+**Simplified estimate (for engineering purposes):**
+```
+xpeak ≈ m·A₀/|K(ωp)|
+```
+
+#### 5.6.5 Response Regimes Based on Frequency Ratio
+
+The ratio rp = fp/fn determines the response character:
+
+| Frequency Ratio | Regime | Response Characteristic |
+|-----------------|--------|------------------------|
+| rp << 1 | Quasi-static | Peak response ≈ m·A₀/k (static deflection under peak force) |
+| rp ≈ 1 | Resonant | Maximum amplification, xpeak >> m·A₀/k |
+| rp >> 1 | Impulsive | Response governed by impulse, xpeak ≈ m·A₀·τ/(m·ωn) |
+
+#### 5.6.6 Dynamic Amplification Factor
+
+The ratio of peak dynamic displacement to equivalent static displacement:
+
+```
+DAF = xpeak/(Fpeak/k) = k/|K(ωp)| · DSF
+```
+
+For undamped systems at specific frequency ratios:
+- rp = 0: DAF = 1.0 (static)
+- rp = 1: DAF = 1/(2ζ) (resonance, damping limited)
+- rp = 2: DAF ≈ 0.33 (isolation region)
+
+#### 5.6.7 Practical Application
+
+**Step 1:** Calculate the pulse frequency
+```
+fp = 1/(2τ)
+```
+
+**Step 2:** Determine frequency ratio
+```
+rp = fp/fn = (1/2τ)/(ωn/2π) = π/(τ·ωn)
+```
+
+**Step 3:** Calculate dynamic stiffness at pulse frequency
+```
+|K(ωp)| = k·√[(1 - rp²)² + (2ζrp)²]
+```
+
+**Step 4:** Estimate peak displacement
+```
+xpeak ≈ m·A₀/|K(ωp)|
+```
+
+**Step 5:** Convert to peak acceleration response (if needed)
+```
+apeak_response ≈ ωn²·xpeak
+```
+
+#### 5.6.8 Design Implications
+
+1. **If fp < fn (long pulse):** System responds quasi-statically; increase stiffness to reduce displacement
+
+2. **If fp ≈ fn (resonant pulse):** Maximum response; either:
+   - Increase damping to limit resonant amplification
+   - Modify system to shift fn away from fp
+
+3. **If fp > fn (short pulse):** System provides natural isolation; lower stiffness beneficial
+
+The dynamic stiffness plot in the tool allows visualization of |K(ωp)| across frequencies, enabling quick assessment of system response to various pulse durations.
+
 ## 6. Shock Response Spectrum (SRS)
 
 ### 6.1 Definition
