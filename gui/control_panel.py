@@ -21,6 +21,10 @@ class ControlPanel(ctk.CTkFrame):
         self.on_export_plot = on_export_plot
         self.on_export_data = on_export_data
 
+        # Track excitation freq widgets for show/hide
+        self._excitation_label = None
+        self._excitation_entry = None
+
         self._setup_ui()
 
     def _setup_ui(self):
@@ -138,7 +142,8 @@ class ControlPanel(ctk.CTkFrame):
         self.time_response_type = ctk.CTkComboBox(
             self.options_frame,
             values=["Impulse", "Step", "Harmonic", "Free Vibration"],
-            width=120
+            width=120,
+            command=self._on_time_response_type_changed
         )
         self.time_response_type.set("Impulse")
         self.time_response_type.grid(row=0, column=1, padx=5, pady=5, sticky="w")
@@ -150,12 +155,33 @@ class ControlPanel(ctk.CTkFrame):
         self.duration_entry.insert(0, "5")
         self.duration_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
-        ctk.CTkLabel(self.options_frame, text="Excitation freq (Hz):").grid(
-            row=0, column=4, padx=5, pady=5, sticky="e"
-        )
+        # Excitation frequency (only visible for Harmonic)
+        self._excitation_label = ctk.CTkLabel(self.options_frame, text="Excitation freq (Hz):")
+        self._excitation_label.grid(row=0, column=4, padx=5, pady=5, sticky="e")
         self.excitation_freq_entry = ctk.CTkEntry(self.options_frame, width=80)
         self.excitation_freq_entry.insert(0, "1.5")
         self.excitation_freq_entry.grid(row=0, column=5, padx=5, pady=5, sticky="w")
+        self._excitation_entry = self.excitation_freq_entry
+
+        # Initially hide excitation freq (Impulse is default)
+        self._update_excitation_visibility("Impulse")
+
+    def _on_time_response_type_changed(self, value: str):
+        """Handle time response type change."""
+        self._update_excitation_visibility(value)
+
+    def _update_excitation_visibility(self, response_type: str):
+        """Show/hide excitation frequency based on response type."""
+        if response_type == "Harmonic":
+            if self._excitation_label:
+                self._excitation_label.grid()
+            if self._excitation_entry:
+                self._excitation_entry.grid()
+        else:
+            if self._excitation_label:
+                self._excitation_label.grid_remove()
+            if self._excitation_entry:
+                self._excitation_entry.grid_remove()
 
     def _on_analysis_type_changed(self, value: str):
         """Handle analysis type change."""
