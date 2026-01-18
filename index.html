@@ -989,7 +989,8 @@
                         amplitudeLabel.textContent = 'Force Amplitude (N)';
                         break;
                     case 'halfsine':
-                        amplitudeLabel.textContent = 'Peak Force (N)';
+                        amplitudeLabel.textContent = 'Max Shock (g)';
+                        document.getElementById('excitationAmplitude').value = '50';
                         break;
                 }
             }
@@ -1187,13 +1188,16 @@
                         break;
                     case 'halfsine':
                         const halfsinePulseDuration = parseFloat(document.getElementById('halfsinePulseDuration').value) / 1000; // ms to s
-                        const halfsineResult = computeHalfSineResponse(system, time, halfsinePulseDuration, amplitude);
+                        const shockLevelG = amplitude; // amplitude is now in g's
+                        const peakAccel = shockLevelG * 9.81; // convert to m/s²
+                        const peakForce = system.mass * peakAccel; // F = ma
+                        const halfsineResult = computeHalfSineResponse(system, time, halfsinePulseDuration, peakForce);
                         displacement = halfsineResult.displacement;
                         forceData = halfsineResult.force;
                         title = 'Half-Sine Pulse Response';
                         const pulsePeriod = 2 * halfsinePulseDuration;
                         const pulseFreq = 1 / pulsePeriod;
-                        subtitle = `F_peak = ${amplitude} N, Pulse duration = ${(halfsinePulseDuration*1000).toFixed(1)} ms, Pulse freq = ${pulseFreq.toFixed(1)} Hz, fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`;
+                        subtitle = `Shock = ${shockLevelG} g (${peakAccel.toFixed(1)} m/s²), Duration = ${(halfsinePulseDuration*1000).toFixed(1)} ms, Pulse freq = ${pulseFreq.toFixed(1)} Hz, fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`;
                         break;
                     case 'free':
                         displacement = computeFreeVibration(system, time, initialDisp, initialVel);
