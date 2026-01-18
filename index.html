@@ -321,7 +321,7 @@
                     <div class="form-group">
                         <label>Output Type</label>
                         <select id="outputType" onchange="calculate();">
-                            <option value="displacement">Displacement (m)</option>
+                            <option value="displacement">Displacement (mm)</option>
                             <option value="velocity">Velocity (m/s)</option>
                             <option value="acceleration">Acceleration (m/s²)</option>
                             <option value="acceleration_g">Acceleration (g)</option>
@@ -329,7 +329,7 @@
                     </div>
                     <div class="form-group">
                         <label>Max Allowable Value</label>
-                        <input type="number" id="maxDisplacement" value="0.1" step="0.01" min="0.001">
+                        <input type="number" id="maxDisplacement" value="100" step="1" min="0.001">
                     </div>
                     <div class="checkbox-group" style="margin-top: 0; align-self: flex-end; padding-bottom: 10px;">
                         <input type="checkbox" id="showMaxDisp" checked>
@@ -1251,20 +1251,20 @@
                     case 'step':
                         displacement = computeStepResponse(system, time, amplitude);
                         title = 'Step Response';
-                        subtitle = `F₀ = ${amplitude} N, Static deflection = ${(amplitude/system.stiffness).toExponential(3)} m`;
+                        subtitle = `F₀ = ${amplitude} N, Static deflection = ${(amplitude/system.stiffness * 1000).toFixed(3)} mm`;
                         break;
                     case 'harmonic':
                         displacement = computeHarmonicResponse(system, time, excitationFreq, amplitude);
                         title = `Harmonic Response`;
                         const steadyAmp = amplitude / Math.sqrt(Math.pow(system.stiffness - system.mass * Math.pow(2*Math.PI*excitationFreq, 2), 2) + Math.pow(system.damping * 2*Math.PI*excitationFreq, 2));
-                        subtitle = `f = ${excitationFreq} Hz (ω/ωn = ${freqRatio.toFixed(3)}), F₀ = ${amplitude} N, Xss = ${steadyAmp.toExponential(3)} m`;
+                        subtitle = `f = ${excitationFreq} Hz (ω/ωn = ${freqRatio.toFixed(3)}), F₀ = ${amplitude} N, Xss = ${(steadyAmp * 1000).toFixed(3)} mm`;
                         break;
                     case 'ramp':
                         const rampResult = computeRampResponse(system, time, rampTime, amplitude);
                         displacement = rampResult.displacement;
                         forceData = rampResult.force;
                         title = 'Ramp Force Response';
-                        subtitle = `F_final = ${amplitude} N, Ramp time = ${rampTime} s, Static deflection = ${(amplitude/system.stiffness).toExponential(3)} m`;
+                        subtitle = `F_final = ${amplitude} N, Ramp time = ${rampTime} s, Static deflection = ${(amplitude/system.stiffness * 1000).toFixed(3)} mm`;
                         break;
                     case 'chirp':
                         const chirpResult = computeChirpResponse(system, time, chirpStartFreq, chirpEndFreq, amplitude);
@@ -1289,7 +1289,7 @@
                     case 'free':
                         displacement = computeFreeVibration(system, time, initialDisp, initialVel);
                         title = 'Free Vibration';
-                        subtitle = `x₀ = ${initialDisp} m, v₀ = ${initialVel} m/s`;
+                        subtitle = `x₀ = ${initialDisp * 1000} mm, v₀ = ${initialVel} m/s`;
                         break;
                 }
 
@@ -1300,9 +1300,9 @@
 
                 switch (outputType) {
                     case 'displacement':
-                        outputData = displacement;
-                        yAxisLabel = 'Displacement (m)';
-                        outputUnit = 'm';
+                        outputData = displacement.map(d => d * 1000); // Convert m to mm
+                        yAxisLabel = 'Displacement (mm)';
+                        outputUnit = 'mm';
                         break;
                     case 'velocity':
                         outputData = computeVelocity(displacement, dt);
@@ -1331,6 +1331,7 @@
 
                 // Add envelope for decaying responses (only for displacement)
                 if ((responseType === 'free' || responseType === 'impulse') && system.isUnderdamped && outputType === 'displacement') {
+                    // outputData is already in mm, so use it directly for max amplitude
                     const maxAmp = Math.max(...outputData.map(Math.abs));
                     const envelope = time.map(t => maxAmp * Math.exp(-system.dampingRatio * system.naturalFrequency * t));
                     traces.push({
@@ -1353,16 +1354,17 @@
                 if (responseType === 'harmonic' && outputType === 'displacement') {
                     const omega = 2 * Math.PI * excitationFreq;
                     const steadyAmp = amplitude / Math.sqrt(Math.pow(system.stiffness - system.mass * omega * omega, 2) + Math.pow(system.damping * omega, 2));
+                    const steadyAmpMm = steadyAmp * 1000; // Convert to mm
                     traces.push({
                         x: [time[0], time[time.length-1]],
-                        y: [steadyAmp, steadyAmp],
+                        y: [steadyAmpMm, steadyAmpMm],
                         type: 'scatter',
-                        name: `Steady-state: ±${steadyAmp.toExponential(2)} m`,
+                        name: `Steady-state: ±${steadyAmpMm.toFixed(3)} mm`,
                         line: { color: '#e67e22', dash: 'dash', width: 2 }
                     });
                     traces.push({
                         x: [time[0], time[time.length-1]],
-                        y: [-steadyAmp, -steadyAmp],
+                        y: [-steadyAmpMm, -steadyAmpMm],
                         type: 'scatter',
                         showlegend: false,
                         line: { color: '#e67e22', dash: 'dash', width: 2 }
@@ -1372,11 +1374,12 @@
                 // Add static deflection line for ramp response (only for displacement)
                 if (responseType === 'ramp' && outputType === 'displacement') {
                     const staticDeflection = amplitude / system.stiffness;
+                    const staticDeflectionMm = staticDeflection * 1000; // Convert to mm
                     traces.push({
                         x: [time[0], time[time.length-1]],
-                        y: [staticDeflection, staticDeflection],
+                        y: [staticDeflectionMm, staticDeflectionMm],
                         type: 'scatter',
-                        name: `Static deflection: ${staticDeflection.toExponential(2)} m`,
+                        name: `Static deflection: ${staticDeflectionMm.toFixed(3)} mm`,
                         line: { color: '#e67e22', dash: 'dash', width: 2 }
                     });
                 }
