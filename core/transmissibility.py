@@ -1,122 +1,138 @@
 """Transmissibility calculations for SDOF systems."""
-from __future__ import annotations
 
 import numpy as np
-from numpy.typing import NDArray
-
+from typing import Tuple, List
 from .sdof_system import SDOFSystem
 
 
 def compute_transmissibility(
     system: SDOFSystem,
-    frequencies: NDArray[np.floating]
-) -> NDArray[np.floating]:
-    """Compute force or displacement transmissibility TR(ω).
-
-    TR = |Ft/F0| = |X/Y| = √[(1 + (2ζr)²) / ((1-r²)² + (2ζr)²)]
-
-    where r = ω/ωn is the frequency ratio.
-
+    frequencies: np.ndarray,
+    freq_unit: str = "rad/s"
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute force/displacement transmissibility for an SDOF system.
+    
+    TR = |Ft/F| = |X_base/X| = sqrt[(1 + (2ζr)²) / ((1-r²)² + (2ζr)²)]
+    where r = ω/ωn
+    
     Args:
-        system: SDOF system parameters
-        frequencies: Frequency array in Hz
-
+        system: SDOFSystem instance
+        frequencies: Array of frequencies
+        freq_unit: "rad/s" or "hz"
+    
     Returns:
-        Transmissibility array (dimensionless)
+        Tuple of (frequency ratios r, transmissibility TR)
     """
-    omega = 2 * np.pi * frequencies
-    r = omega / system.natural_frequency
+    if freq_unit.lower() == "hz":
+        omega = 2 * np.pi * frequencies
+    else:
+        omega = frequencies
+    
+    omega_n = system.natural_frequency
     zeta = system.damping_ratio
-
-    return compute_transmissibility_normalized(zeta, r)
+    
+    r = omega / omega_n
+    
+    TR = compute_transmissibility_normalized(zeta, r)
+    
+    return r, TR
 
 
 def compute_transmissibility_normalized(
-    zeta: float | NDArray[np.floating],
-    frequency_ratios: NDArray[np.floating]
-) -> NDArray[np.floating]:
+    zeta: float,
+    frequency_ratios: np.ndarray
+) -> np.ndarray:
     """Compute normalized transmissibility.
-
-    TR = √[(1 + (2ζr)²) / ((1-r²)² + (2ζr)²)]
-
+    
+    TR = sqrt[(1 + (2ζr)²) / ((1-r²)² + (2ζr)²)]
+    
     Args:
-        zeta: Damping ratio (scalar or array for multiple curves)
-        frequency_ratios: Array of frequency ratios r = ω/ωn
-
+        zeta: Damping ratio
+        frequency_ratios: Array of r = ω/ωn values
+    
     Returns:
-        Transmissibility array
+        Array of transmissibility values
     """
     r = frequency_ratios
-    zeta = np.atleast_1d(zeta)
-
-    # Handle broadcasting for multiple zeta values
-    if zeta.ndim == 1 and r.ndim == 1:
-        r = r[np.newaxis, :]  # Shape: (1, N)
-        zeta = zeta[:, np.newaxis]  # Shape: (M, 1)
-
+    
     numerator = 1 + (2 * zeta * r)**2
     denominator = (1 - r**2)**2 + (2 * zeta * r)**2
-
+    
     TR = np.sqrt(numerator / denominator)
+    
+    return TR
 
-    return np.squeeze(TR)
 
-
-def compute_transmissibility_db(
-    system: SDOFSystem,
-    frequencies: NDArray[np.floating]
-) -> NDArray[np.floating]:
-    """Compute transmissibility in decibels.
-
+def compute_transmissibility_multi_zeta(
+    zeta_values: List[float],
+    frequency_ratios: np.ndarray
+) -> List[np.ndarray]:
+    """Compute transmissibility for multiple damping ratios.
+    
     Args:
-        system: SDOF system parameters
-        frequencies: Frequency array in Hz
-
+        zeta_values: List of damping ratios
+        frequency_ratios: Array of r = ω/ωn values
+    
     Returns:
-        Transmissibility in dB (20*log10(TR))
+        List of transmissibility arrays, one per zeta value
     """
-    TR = compute_transmissibility(system, frequencies)
-    return 20 * np.log10(TR)
+    return [compute_transmissibility_normalized(zeta, frequency_ratios) 
+            for zeta in zeta_values]
 
 
-def isolation_efficiency(TR: float | NDArray[np.floating]) -> float | NDArray[np.floating]:
-    """Calculate isolation efficiency from transmissibility.
-
-    Isolation efficiency = (1 - TR) * 100%
-
-    Positive values indicate force/motion reduction.
-    Negative values indicate amplification.
-
-    Args:
-        TR: Transmissibility value(s)
-
+def find_crossover_frequency() -> float:
+    """Find the frequency ratio where all TR curves cross.
+    
+    All transmissibility curves cross at r = sqrt(2), where TR = 1
+    for any damping ratio.
+    
     Returns:
-        Isolation efficiency in percent
-    """
-    return (1 - TR) * 100
-
-
-def crossover_frequency_ratio() -> float:
-    """Return the frequency ratio where TR = 1 for all damping ratios.
-
-    At r = √2, the transmissibility equals 1 regardless of damping.
-    Above this frequency, isolation begins.
-
-    Returns:
-        Crossover frequency ratio (√2 ≈ 1.414)
+        Crossover frequency ratio (sqrt(2) ≈ 1.414)
     """
     return np.sqrt(2)
 
 
-def find_isolation_start(system: SDOFSystem) -> float:
-    """Find the frequency where isolation begins (TR < 1).
-
-    This occurs at r = √2, so f = √2 * fn.
-
+def find_resonance_frequency(zeta: float) -> float:
+    """Find the frequency ratio at peak transmissibility.
+    
+    For an underdamped system (ζ < 1/√2), peak occurs at:
+    r_peak = sqrt(sqrt(1 + 8ζ²) - 1) / (2ζ) for ζ < 0.5
+    
+    For heavily damped systems, peak is at r = 0.
+    
     Args:
-        system: SDOF system
-
+        zeta: Damping ratio
+    
     Returns:
-        Isolation start frequency in Hz
+        Frequency ratio at resonance
     """
-    return np.sqrt(2) * system.natural_frequency_hz
+    if zeta >= 1 / np.sqrt(2):
+        return 0.0
+    
+    # For TR, the peak is slightly different from FRF
+    # Peak occurs where d(TR)/dr = 0
+    # For small damping, it's approximately at r ≈ 1
+    return np.sqrt(1 - 2 * zeta**2) if zeta < 0.5 else 0.0
+
+
+def peak_transmissibility(zeta: float) -> float:
+    """Calculate the peak transmissibility value.
+    
+    Q = 1 / (2ζ) for small damping (ζ << 1)
+    
+    Args:
+        zeta: Damping ratio
+    
+    Returns:
+        Peak transmissibility value
+    """
+    if zeta <= 0:
+        return np.inf
+    if zeta >= 1 / np.sqrt(2):
+        return 1.0
+    
+    r_peak = find_resonance_frequency(zeta)
+    if r_peak == 0:
+        return 1.0
+    
+    return compute_transmissibility_normalized(zeta, np.array([r_peak]))[0]

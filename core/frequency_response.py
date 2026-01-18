@@ -1,111 +1,96 @@
 """Frequency Response Function (FRF) calculations for SDOF systems."""
 
 import numpy as np
-from numpy.typing import NDArray
-
+from typing import Tuple
 from .sdof_system import SDOFSystem
 
 
 def compute_frf(
     system: SDOFSystem,
-    frequencies: NDArray[np.floating],
-    output_type: str = "displacement"
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.complexfloating]]:
-    """Compute frequency response function H(ω).
-
-    The FRF relates the output displacement to input force:
-    H(ω) = X/F = 1 / ((k - mω²) + jcω)
-
+    frequencies: np.ndarray,
+    freq_unit: str = "rad/s"
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the frequency response function H(ω) for an SDOF system.
+    
+    The FRF is defined as: H(ω) = X/F = 1/((k - mω²) + jcω)
+    
     Args:
-        system: SDOF system parameters
-        frequencies: Frequency array in Hz
-        output_type: Type of output ("displacement", "velocity", "acceleration")
-
+        system: SDOFSystem instance
+        frequencies: Array of frequencies
+        freq_unit: "rad/s" or "hz"
+    
     Returns:
-        Tuple of (magnitude in dB, phase in degrees, complex FRF)
+        Tuple of (frequencies in rad/s, magnitude, phase in degrees)
     """
-    omega = 2 * np.pi * frequencies  # Convert to rad/s
-
+    if freq_unit.lower() == "hz":
+        omega = 2 * np.pi * frequencies
+    else:
+        omega = frequencies
+    
     m = system.mass
     k = system.stiffness
     c = system.damping
-
+    
     # Complex FRF: H(ω) = 1 / ((k - mω²) + jcω)
     denominator = (k - m * omega**2) + 1j * c * omega
     H = 1.0 / denominator
-
-    # Modify for output type
-    if output_type == "velocity":
-        H = 1j * omega * H
-    elif output_type == "acceleration":
-        H = -omega**2 * H
-
-    # Magnitude in dB (reference: static compliance 1/k)
-    magnitude_db = 20 * np.log10(np.abs(H) * k)
-
-    # Phase in degrees
-    phase_deg = np.degrees(np.angle(H))
-
-    return magnitude_db, phase_deg, H
+    
+    magnitude = np.abs(H)
+    phase = np.angle(H, deg=True)
+    
+    return omega, magnitude, phase
 
 
 def compute_frf_normalized(
     zeta: float,
-    frequency_ratios: NDArray[np.floating]
-) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
+    frequency_ratios: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     """Compute normalized FRF magnitude and phase.
-
-    Uses the normalized form: H(r) = 1 / ((1 - r²) + j2ζr)
+    
+    Normalized form: H(r) = 1 / ((1 - r²) + j(2ζr))
     where r = ω/ωn is the frequency ratio.
-
+    
     Args:
         zeta: Damping ratio
-        frequency_ratios: Array of frequency ratios r = ω/ωn
-
+        frequency_ratios: Array of r = ω/ωn values
+    
     Returns:
-        Tuple of (magnitude ratio |H|, phase in degrees)
+        Tuple of (magnitude normalized by 1/k, phase in degrees)
     """
     r = frequency_ratios
-    denominator = (1 - r**2) + 1j * 2 * zeta * r
-    H = 1.0 / denominator
+    
+    denominator = (1 - r**2) + 1j * (2 * zeta * r)
+    H_norm = 1.0 / denominator
+    
+    magnitude = np.abs(H_norm)
+    phase = np.angle(H_norm, deg=True)
+    
+    return magnitude, phase
 
-    magnitude = np.abs(H)
-    phase_deg = np.degrees(np.angle(H))
 
-    return magnitude, phase_deg
+def magnitude_to_db(magnitude: np.ndarray) -> np.ndarray:
+    """Convert magnitude to decibels (dB)."""
+    return 20 * np.log10(magnitude)
 
 
-def resonance_amplitude(zeta: float) -> float:
-    """Calculate the amplitude magnification at resonance.
-
-    For underdamped systems (ζ < 1), the peak occurs near ω = ωn√(1-2ζ²)
-    and the maximum amplitude is Q = 1/(2ζ√(1-ζ²)).
-
-    For small damping, Q ≈ 1/(2ζ).
-
+def generate_frequency_array(
+    f_min: float,
+    f_max: float,
+    n_points: int = 1000,
+    log_scale: bool = True
+) -> np.ndarray:
+    """Generate an array of frequencies for FRF calculation.
+    
     Args:
-        zeta: Damping ratio
-
+        f_min: Minimum frequency
+        f_max: Maximum frequency
+        n_points: Number of frequency points
+        log_scale: Use logarithmic spacing if True
+    
     Returns:
-        Peak amplitude magnification factor
+        Array of frequencies
     """
-    if zeta >= 1 / np.sqrt(2):
-        # No resonance peak for ζ >= 1/√2
-        return 1.0
-
-    return 1.0 / (2 * zeta * np.sqrt(1 - zeta**2))
-
-
-def half_power_bandwidth(system: SDOFSystem) -> float:
-    """Calculate the half-power bandwidth.
-
-    The half-power points occur where the amplitude is 1/√2 times the peak.
-    Bandwidth Δω ≈ 2ζωn for small damping.
-
-    Args:
-        system: SDOF system
-
-    Returns:
-        Half-power bandwidth in rad/s
-    """
-    return 2 * system.damping_ratio * system.natural_frequency
+    if log_scale:
+        return np.logspace(np.log10(f_min), np.log10(f_max), n_points)
+    else:
+        return np.linspace(f_min, f_max, n_points)
