@@ -273,6 +273,13 @@
                     <label>Freq max (Hz)</label>
                     <input type="number" id="freqMax" value="100" step="1" min="1">
                 </div>
+                <div class="form-group">
+                    <label>Plot Type</label>
+                    <select id="frfPlotType" onchange="calculate();">
+                        <option value="frf">FRF (Receptance)</option>
+                        <option value="dynamic_stiffness">Dynamic Stiffness</option>
+                    </select>
+                </div>
             </div>
 
             <div id="trans-options" class="options-row" style="display:none;">
@@ -489,6 +496,7 @@
         function computeFRF(system, frequencies) {
             const magnitudeDb = [];
             const phaseDeg = [];
+            const dynamicStiffness = [];
 
             for (const f of frequencies) {
                 const omega = 2 * Math.PI * f;
@@ -503,9 +511,12 @@
                 const H_mag = 1 / denomMag;
                 magnitudeDb.push(20 * Math.log10(H_mag * k));
                 phaseDeg.push(-Math.atan2(imag, real) * 180 / Math.PI);
+
+                // Dynamic stiffness K(ω) = F/X = 1/H = √[(k-mω²)² + (cω)²]
+                dynamicStiffness.push(denomMag);
             }
 
-            return { magnitudeDb, phaseDeg };
+            return { magnitudeDb, phaseDeg, dynamicStiffness };
         }
 
         // Compute Transmissibility
@@ -1129,46 +1140,103 @@
             if (currentTab === 'frf') {
                 const fMin = parseFloat(document.getElementById('freqMin').value);
                 const fMax = parseFloat(document.getElementById('freqMax').value);
+                const frfPlotType = document.getElementById('frfPlotType').value;
                 const frequencies = logspace(fMin, fMax, 500);
-                const { magnitudeDb, phaseDeg } = computeFRF(system, frequencies);
+                const { magnitudeDb, phaseDeg, dynamicStiffness } = computeFRF(system, frequencies);
 
-                const traces = [
-                    {
-                        x: frequencies,
-                        y: magnitudeDb,
+                let traces, frfLayout;
+
+                if (frfPlotType === 'dynamic_stiffness') {
+                    // Dynamic Stiffness plot
+                    traces = [
+                        {
+                            x: frequencies,
+                            y: dynamicStiffness,
+                            type: 'scatter',
+                            name: 'Dynamic Stiffness',
+                            line: { color: '#2c5f7c', width: 2 },
+                            xaxis: 'x',
+                            yaxis: 'y'
+                        },
+                        {
+                            x: frequencies,
+                            y: phaseDeg,
+                            type: 'scatter',
+                            name: 'Phase',
+                            line: { color: '#ff6b6b' },
+                            xaxis: 'x2',
+                            yaxis: 'y2'
+                        }
+                    ];
+
+                    // Add static stiffness reference line
+                    traces.push({
+                        x: [fMin, fMax],
+                        y: [system.stiffness, system.stiffness],
                         type: 'scatter',
-                        name: 'Magnitude',
-                        line: { color: '#2c5f7c', width: 2 },
+                        name: `Static k = ${system.stiffness.toExponential(2)} N/m`,
+                        line: { color: '#27ae60', dash: 'dash', width: 2 },
                         xaxis: 'x',
                         yaxis: 'y'
-                    },
-                    {
-                        x: frequencies,
-                        y: phaseDeg,
-                        type: 'scatter',
-                        name: 'Phase',
-                        line: { color: '#ff6b6b' },
-                        xaxis: 'x2',
-                        yaxis: 'y2'
-                    }
-                ];
+                    });
 
-                const frfLayout = {
-                    ...layout,
-                    title: 'Frequency Response Function',
-                    grid: { rows: 2, columns: 1, pattern: 'independent' },
-                    xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
-                    yaxis: { ...layout.yaxis, title: 'Magnitude (dB)', domain: [0.55, 1], autorange: true },
-                    xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
-                    yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4], autorange: true },
-                    showlegend: false,
-                    shapes: [
-                        { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
-                    ],
-                    annotations: [
-                        { x: Math.log10(system.naturalFrequencyHz), y: 1, yref: 'paper', text: `fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`, showarrow: false, yanchor: 'bottom', font: { color: 'red' } }
-                    ]
-                };
+                    frfLayout = {
+                        ...layout,
+                        title: 'Dynamic Stiffness K(ω) = F/X',
+                        grid: { rows: 2, columns: 1, pattern: 'independent' },
+                        xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
+                        yaxis: { ...layout.yaxis, type: 'log', title: 'Dynamic Stiffness (N/m)', domain: [0.55, 1], autorange: true },
+                        xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
+                        yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4], autorange: true },
+                        showlegend: true,
+                        legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                        shapes: [
+                            { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
+                        ],
+                        annotations: [
+                            { x: Math.log10(system.naturalFrequencyHz), y: 1, yref: 'paper', text: `fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`, showarrow: false, yanchor: 'bottom', font: { color: 'red' } }
+                        ]
+                    };
+                } else {
+                    // Standard FRF plot
+                    traces = [
+                        {
+                            x: frequencies,
+                            y: magnitudeDb,
+                            type: 'scatter',
+                            name: 'Magnitude',
+                            line: { color: '#2c5f7c', width: 2 },
+                            xaxis: 'x',
+                            yaxis: 'y'
+                        },
+                        {
+                            x: frequencies,
+                            y: phaseDeg,
+                            type: 'scatter',
+                            name: 'Phase',
+                            line: { color: '#ff6b6b' },
+                            xaxis: 'x2',
+                            yaxis: 'y2'
+                        }
+                    ];
+
+                    frfLayout = {
+                        ...layout,
+                        title: 'Frequency Response Function',
+                        grid: { rows: 2, columns: 1, pattern: 'independent' },
+                        xaxis: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
+                        yaxis: { ...layout.yaxis, title: 'Magnitude (dB)', domain: [0.55, 1], autorange: true },
+                        xaxis2: { ...layout.xaxis, type: 'log', title: 'Frequency (Hz)', autorange: true },
+                        yaxis2: { ...layout.yaxis, title: 'Phase (deg)', domain: [0, 0.4], autorange: true },
+                        showlegend: false,
+                        shapes: [
+                            { type: 'line', x0: system.naturalFrequencyHz, x1: system.naturalFrequencyHz, y0: 0, y1: 1, yref: 'paper', line: { color: 'red', dash: 'dash' } }
+                        ],
+                        annotations: [
+                            { x: Math.log10(system.naturalFrequencyHz), y: 1, yref: 'paper', text: `fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`, showarrow: false, yanchor: 'bottom', font: { color: 'red' } }
+                        ]
+                    };
+                }
 
                 Plotly.newPlot(plotDiv, traces, frfLayout, config);
 
