@@ -13,8 +13,8 @@
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
+            background: #f0f4f8;
+            color: #2d3748;
             min-height: 100vh;
         }
         .container {
@@ -29,27 +29,32 @@
             grid-column: 1 / -1;
             text-align: center;
             padding: 20px;
-            background: linear-gradient(135deg, #16213e, #0f3460);
+            background: linear-gradient(135deg, #4a90a4, #2c5f7c);
             border-radius: 10px;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         header h1 {
             font-size: 1.8rem;
             margin-bottom: 5px;
+            color: #fff;
         }
         header p {
-            color: #888;
+            color: rgba(255,255,255,0.8);
             font-size: 0.9rem;
         }
         .panel {
-            background: #16213e;
+            background: #ffffff;
             border-radius: 10px;
             padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border: 1px solid #e2e8f0;
         }
         .input-panel h2, .plot-panel h2 {
             font-size: 1.1rem;
             margin-bottom: 15px;
-            color: #00d9ff;
-            border-bottom: 1px solid #333;
+            color: #2c5f7c;
+            border-bottom: 2px solid #e2e8f0;
             padding-bottom: 10px;
         }
         .form-group {
@@ -59,45 +64,48 @@
             display: block;
             margin-bottom: 5px;
             font-size: 0.9rem;
-            color: #aaa;
+            color: #4a5568;
+            font-weight: 500;
         }
         .form-group input, .form-group select {
             width: 100%;
             padding: 10px;
-            border: 1px solid #333;
+            border: 1px solid #cbd5e0;
             border-radius: 5px;
-            background: #0f3460;
-            color: #fff;
+            background: #fff;
+            color: #2d3748;
             font-size: 1rem;
         }
         .form-group input:focus, .form-group select:focus {
             outline: none;
-            border-color: #00d9ff;
+            border-color: #4a90a4;
+            box-shadow: 0 0 0 3px rgba(74,144,164,0.15);
         }
         .derived-values {
-            background: #0f3460;
+            background: #f7fafc;
             border-radius: 8px;
             padding: 15px;
             margin-top: 20px;
+            border: 1px solid #e2e8f0;
         }
         .derived-values h3 {
             font-size: 0.95rem;
             margin-bottom: 12px;
-            color: #00d9ff;
+            color: #2c5f7c;
         }
         .derived-item {
             display: flex;
             justify-content: space-between;
             padding: 6px 0;
-            border-bottom: 1px solid #1a1a2e;
+            border-bottom: 1px solid #e2e8f0;
             font-size: 0.9rem;
         }
         .derived-item:last-child {
             border-bottom: none;
         }
         .derived-item .value {
-            color: #00d9ff;
-            font-weight: 500;
+            color: #2c5f7c;
+            font-weight: 600;
         }
         .tabs {
             display: flex;
@@ -107,26 +115,27 @@
         }
         .tab {
             padding: 10px 15px;
-            background: #0f3460;
+            background: #e2e8f0;
             border: none;
             border-radius: 5px;
-            color: #888;
+            color: #4a5568;
             cursor: pointer;
             transition: all 0.2s;
             font-size: 0.9rem;
+            font-weight: 500;
         }
         .tab:hover {
-            background: #1a4a7a;
+            background: #cbd5e0;
         }
         .tab.active {
-            background: #00d9ff;
-            color: #000;
+            background: #4a90a4;
+            color: #fff;
         }
         .btn {
             width: 100%;
             padding: 12px;
-            background: #00d9ff;
-            color: #000;
+            background: #4a90a4;
+            color: #fff;
             border: none;
             border-radius: 5px;
             font-size: 1rem;
@@ -136,10 +145,12 @@
             transition: background 0.2s;
         }
         .btn:hover {
-            background: #00b8d9;
+            background: #3d7a8c;
         }
         .plot-container {
             height: 500px;
+            background: #fff;
+            border-radius: 8px;
         }
         .options-row {
             display: flex;
@@ -161,17 +172,22 @@
         .checkbox-group input[type="checkbox"] {
             width: 18px;
             height: 18px;
+            accent-color: #4a90a4;
+        }
+        .checkbox-group label {
+            color: #4a5568;
         }
         .srs-info {
-            background: #0a1628;
+            background: #edf2f7;
             border-radius: 5px;
             padding: 10px;
             margin-bottom: 15px;
             font-size: 0.85rem;
-            color: #888;
+            color: #4a5568;
+            border-left: 3px solid #4a90a4;
         }
         .srs-info strong {
-            color: #00d9ff;
+            color: #2c5f7c;
         }
         @media (max-width: 900px) {
             .container {
@@ -301,11 +317,11 @@
                 <div class="options-row" id="harmonicInfoRow" style="display:none;">
                     <div class="form-group">
                         <label>Frequency Ratio (ω/ωn)</label>
-                        <input type="text" id="freqRatioDisplay" value="—" readonly style="background:#1a1a2e; border-color:#555;">
+                        <input type="text" id="freqRatioDisplay" value="—" readonly style="background:#f7fafc; border-color:#cbd5e0;">
                     </div>
                     <div class="form-group">
                         <label>At Resonance?</label>
-                        <input type="text" id="resonanceDisplay" value="—" readonly style="background:#1a1a2e; border-color:#555;">
+                        <input type="text" id="resonanceDisplay" value="—" readonly style="background:#f7fafc; border-color:#cbd5e0;">
                     </div>
                 </div>
                 <div class="options-row" id="freeVibOptions" style="display:none;">
@@ -828,11 +844,11 @@
 
             const plotDiv = document.getElementById('plot');
             const layout = {
-                paper_bgcolor: '#16213e',
-                plot_bgcolor: '#0f3460',
-                font: { color: '#eee' },
-                xaxis: { gridcolor: '#333', zerolinecolor: '#555' },
-                yaxis: { gridcolor: '#333', zerolinecolor: '#555' },
+                paper_bgcolor: '#ffffff',
+                plot_bgcolor: '#f8fafc',
+                font: { color: '#2d3748' },
+                xaxis: { gridcolor: '#e2e8f0', zerolinecolor: '#cbd5e0' },
+                yaxis: { gridcolor: '#e2e8f0', zerolinecolor: '#cbd5e0' },
                 margin: { t: 40, r: 20, b: 50, l: 60 }
             };
 
@@ -848,7 +864,7 @@
                         y: magnitudeDb,
                         type: 'scatter',
                         name: 'Magnitude',
-                        line: { color: '#00d9ff' },
+                        line: { color: '#2c5f7c', width: 2 },
                         xaxis: 'x',
                         yaxis: 'y'
                     },
@@ -892,7 +908,7 @@
                 const traces = [];
                 if (multiZeta) {
                     const zetaValues = [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0];
-                    const colors = ['#00d9ff', '#00ff88', '#ffff00', '#ff9900', '#ff6b6b', '#cc66ff', '#ffffff'];
+                    const colors = ['#2c5f7c', '#2d882d', '#e6a817', '#d35400', '#c0392b', '#8e44ad', '#34495e'];
                     zetaValues.forEach((z, i) => {
                         traces.push({
                             x: frequencies,
@@ -908,7 +924,7 @@
                         y: computeTransmissibility(system.dampingRatio, r),
                         type: 'scatter',
                         name: `ζ = ${system.dampingRatio.toFixed(3)}`,
-                        line: { color: '#00d9ff' }
+                        line: { color: '#2c5f7c', width: 2 }
                     });
                 }
 
@@ -917,7 +933,7 @@
                     y: [1, 1],
                     type: 'scatter',
                     name: 'TR = 1',
-                    line: { color: 'yellow', dash: 'dash' }
+                    line: { color: '#e67e22', dash: 'dash', width: 2 }
                 });
 
                 const transLayout = {
@@ -926,7 +942,7 @@
                     xaxis: { ...layout.xaxis, title: 'Frequency (Hz)' },
                     yaxis: { ...layout.yaxis, title: 'Transmissibility', type: 'log' },
                     showlegend: true,
-                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' }
                 };
 
                 Plotly.newPlot(plotDiv, traces, transLayout);
@@ -975,7 +991,7 @@
                     y: displacement,
                     type: 'scatter',
                     name: 'Response',
-                    line: { color: '#00d9ff' }
+                    line: { color: '#2c5f7c', width: 2 }
                 }];
 
                 // Add envelope for decaying responses
@@ -1007,14 +1023,14 @@
                         y: [steadyAmp, steadyAmp],
                         type: 'scatter',
                         name: `Steady-state: ±${steadyAmp.toExponential(2)} m`,
-                        line: { color: 'yellow', dash: 'dash' }
+                        line: { color: '#e67e22', dash: 'dash', width: 2 }
                     });
                     traces.push({
                         x: [time[0], time[time.length-1]],
                         y: [-steadyAmp, -steadyAmp],
                         type: 'scatter',
                         showlegend: false,
-                        line: { color: 'yellow', dash: 'dash' }
+                        line: { color: '#e67e22', dash: 'dash', width: 2 }
                     });
                 }
 
@@ -1024,7 +1040,7 @@
                     xaxis: { ...layout.xaxis, title: 'Time (s)' },
                     yaxis: { ...layout.yaxis, title: 'Displacement (m)' },
                     showlegend: true,
-                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' },
+                    legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                     annotations: subtitle ? [{
                         x: 0.5, y: 1.08, xref: 'paper', yref: 'paper',
                         text: subtitle, showarrow: false,
@@ -1066,55 +1082,55 @@
                     traces.push({
                         x: frequencies, y: toG(srs.maxi_max),
                         type: 'scatter', name: 'Maxi-Max',
-                        line: { color: '#00d9ff', width: 2 }
+                        line: { color: '#2c5f7c', width: 2 }
                     });
                     traces.push({
                         x: frequencies, y: toG(srs.primary_pos),
                         type: 'scatter', name: 'Primary +',
-                        line: { color: '#00ff88' }
+                        line: { color: '#27ae60', width: 2 }
                     });
                     traces.push({
                         x: frequencies, y: toG(srs.primary_neg),
                         type: 'scatter', name: 'Primary -',
-                        line: { color: '#88ff00' }
+                        line: { color: '#2ecc71', width: 2 }
                     });
                     traces.push({
                         x: frequencies, y: toG(srs.residual_pos),
                         type: 'scatter', name: 'Residual +',
-                        line: { color: '#ff6b6b' }
+                        line: { color: '#c0392b', width: 2 }
                     });
                     traces.push({
                         x: frequencies, y: toG(srs.residual_neg),
                         type: 'scatter', name: 'Residual -',
-                        line: { color: '#ff8888' }
+                        line: { color: '#e74c3c', width: 2 }
                     });
                 } else if (srsType === 'maxi_max') {
                     traces.push({
                         x: frequencies, y: toG(srs.maxi_max),
                         type: 'scatter', name: 'Maxi-Max SRS',
-                        line: { color: '#00d9ff', width: 2 }
+                        line: { color: '#2c5f7c', width: 2 }
                     });
                 } else if (srsType === 'primary') {
                     traces.push({
                         x: frequencies, y: toG(srs.primary_pos),
                         type: 'scatter', name: 'Primary + SRS',
-                        line: { color: '#00ff88', width: 2 }
+                        line: { color: '#27ae60', width: 2 }
                     });
                     traces.push({
                         x: frequencies, y: toG(srs.primary_neg),
                         type: 'scatter', name: 'Primary - SRS',
-                        line: { color: '#88ff00', width: 2 }
+                        line: { color: '#2ecc71', width: 2 }
                     });
                 } else if (srsType === 'residual') {
                     traces.push({
                         x: frequencies, y: toG(srs.residual_pos),
                         type: 'scatter', name: 'Residual + SRS',
-                        line: { color: '#ff6b6b', width: 2 }
+                        line: { color: '#c0392b', width: 2 }
                     });
                     traces.push({
                         x: frequencies, y: toG(srs.residual_neg),
                         type: 'scatter', name: 'Residual - SRS',
-                        line: { color: '#ff8888', width: 2 }
+                        line: { color: '#e74c3c', width: 2 }
                     });
                 }
 
@@ -1123,7 +1139,7 @@
                     x: [srsFreqMin, srsFreqMax],
                     y: [pulseAmplitude / 9.81, pulseAmplitude / 9.81],
                     type: 'scatter', name: 'Input Peak',
-                    line: { color: 'yellow', dash: 'dash' }
+                    line: { color: '#e67e22', dash: 'dash', width: 2 }
                 });
 
                 let srsLayout;
@@ -1138,7 +1154,7 @@
                         y: pulseAccelG,
                         type: 'scatter',
                         name: 'Input Pulse',
-                        line: { color: '#ffaa00', width: 2 },
+                        line: { color: '#d35400', width: 2 },
                         xaxis: 'x2',
                         yaxis: 'y2'
                     });
@@ -1152,7 +1168,7 @@
                         xaxis2: { ...layout.xaxis, title: 'Time (ms)', domain: [0.65, 1] },
                         yaxis2: { ...layout.yaxis, title: 'Acceleration (g)', anchor: 'x2' },
                         showlegend: true,
-                        legend: { x: 0.55, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                        legend: { x: 0.55, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' }
                     };
                 } else {
                     srsLayout = {
@@ -1161,7 +1177,7 @@
                         xaxis: { ...layout.xaxis, type: 'log', title: 'Natural Frequency (Hz)' },
                         yaxis: { ...layout.yaxis, type: 'log', title: 'Peak Response (g)' },
                         showlegend: true,
-                        legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(0,0,0,0.5)' }
+                        legend: { x: 1, xanchor: 'right', y: 1, bgcolor: 'rgba(255,255,255,0.9)' }
                     };
                 }
 
