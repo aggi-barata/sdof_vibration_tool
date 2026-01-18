@@ -513,14 +513,20 @@
             const m = system.mass;
             const wn = system.naturalFrequency;
             const zeta = system.dampingRatio;
-            const wd = system.dampedFrequency;
 
             return time.map(t => {
                 if (t < 0) return 0;
-                if (system.isUnderdamped) {
+                if (zeta < 1) {
+                    // Underdamped
+                    const wd = wn * Math.sqrt(1 - zeta * zeta);
                     return impulse * (1 / (m * wd)) * Math.exp(-zeta * wn * t) * Math.sin(wd * t);
-                } else {
+                } else if (Math.abs(zeta - 1) < 0.001) {
+                    // Critically damped
                     return impulse * (1 / m) * t * Math.exp(-wn * t);
+                } else {
+                    // Overdamped
+                    const wd = wn * Math.sqrt(zeta * zeta - 1);
+                    return impulse * (1 / (m * 2 * wd)) * (Math.exp((-zeta * wn + wd) * t) - Math.exp((-zeta * wn - wd) * t));
                 }
             });
         }
@@ -534,13 +540,21 @@
 
             return time.map(t => {
                 if (t < 0) return 0;
-                if (system.isUnderdamped) {
-                    const wd = system.dampedFrequency;
+                if (zeta < 1) {
+                    // Underdamped
+                    const wd = wn * Math.sqrt(1 - zeta * zeta);
                     const sqrtTerm = Math.sqrt(1 - zeta * zeta);
                     return xStatic * (1 - Math.exp(-zeta * wn * t) *
                         (Math.cos(wd * t) + (zeta / sqrtTerm) * Math.sin(wd * t)));
-                } else {
+                } else if (Math.abs(zeta - 1) < 0.001) {
+                    // Critically damped
                     return xStatic * (1 - (1 + wn * t) * Math.exp(-wn * t));
+                } else {
+                    // Overdamped
+                    const sqrtTerm = Math.sqrt(zeta * zeta - 1);
+                    const s1 = wn * (-zeta + sqrtTerm);
+                    const s2 = wn * (-zeta - sqrtTerm);
+                    return xStatic * (1 + (s2 * Math.exp(s1 * t) - s1 * Math.exp(s2 * t)) / (s1 - s2));
                 }
             });
         }
@@ -551,29 +565,45 @@
             const k = system.stiffness;
             const c = system.damping;
             const omega = 2 * Math.PI * excitationFreq;
+            const wn = system.naturalFrequency;
+            const zeta = system.dampingRatio;
 
+            // Steady-state amplitude and phase (includes damping)
             const denom = Math.sqrt(Math.pow(k - m * omega * omega, 2) + Math.pow(c * omega, 2));
             const X = forceAmplitude / denom;
             const phi = Math.atan2(c * omega, k - m * omega * omega);
 
-            // Include transient for zero initial conditions
-            const wn = system.naturalFrequency;
-            const zeta = system.dampingRatio;
-            const wd = system.dampedFrequency;
+            // Initial conditions for transient (to satisfy zero IC)
+            const x0_trans = -X * Math.sin(-phi);
+            const v0_trans = -X * omega * Math.cos(-phi);
 
             return time.map(t => {
                 if (t < 0) return 0;
-                // Steady-state
+                // Steady-state response
                 const xSteady = X * Math.sin(omega * t - phi);
 
-                if (!system.isUnderdamped) return xSteady;
-
-                // Transient to satisfy zero initial conditions
-                const x0 = -X * Math.sin(-phi);
-                const v0 = -X * omega * Math.cos(-phi);
-                const A = x0;
-                const B = (v0 + zeta * wn * x0) / wd;
-                const xTransient = Math.exp(-zeta * wn * t) * (A * Math.cos(wd * t) + B * Math.sin(wd * t));
+                // Transient response to satisfy zero initial conditions
+                let xTransient = 0;
+                if (zeta < 1) {
+                    // Underdamped transient
+                    const wd = wn * Math.sqrt(1 - zeta * zeta);
+                    const A = x0_trans;
+                    const B = (v0_trans + zeta * wn * x0_trans) / wd;
+                    xTransient = Math.exp(-zeta * wn * t) * (A * Math.cos(wd * t) + B * Math.sin(wd * t));
+                } else if (Math.abs(zeta - 1) < 0.001) {
+                    // Critically damped transient
+                    const A = x0_trans;
+                    const B = v0_trans + wn * x0_trans;
+                    xTransient = (A + B * t) * Math.exp(-wn * t);
+                } else {
+                    // Overdamped transient
+                    const sqrtTerm = Math.sqrt(zeta * zeta - 1);
+                    const s1 = wn * (-zeta + sqrtTerm);
+                    const s2 = wn * (-zeta - sqrtTerm);
+                    const A = (x0_trans * s2 - v0_trans) / (s2 - s1);
+                    const B = (v0_trans - x0_trans * s1) / (s2 - s1);
+                    xTransient = A * Math.exp(s1 * t) + B * Math.exp(s2 * t);
+                }
 
                 return xSteady + xTransient;
             });
@@ -583,18 +613,28 @@
         function computeFreeVibration(system, time, x0 = 1, v0 = 0) {
             const wn = system.naturalFrequency;
             const zeta = system.dampingRatio;
-            const wd = system.dampedFrequency;
 
             return time.map(t => {
                 if (t < 0) return 0;
-                if (system.isUnderdamped) {
+                if (zeta < 1) {
+                    // Underdamped
+                    const wd = wn * Math.sqrt(1 - zeta * zeta);
                     const A = x0;
                     const B = (v0 + zeta * wn * x0) / wd;
                     return Math.exp(-zeta * wn * t) * (A * Math.cos(wd * t) + B * Math.sin(wd * t));
-                } else {
+                } else if (Math.abs(zeta - 1) < 0.001) {
+                    // Critically damped
                     const A = x0;
                     const B = v0 + wn * x0;
                     return (A + B * t) * Math.exp(-wn * t);
+                } else {
+                    // Overdamped
+                    const sqrtTerm = Math.sqrt(zeta * zeta - 1);
+                    const s1 = wn * (-zeta + sqrtTerm);
+                    const s2 = wn * (-zeta - sqrtTerm);
+                    const A = (x0 * s2 - v0) / (s2 - s1);
+                    const B = (v0 - x0 * s1) / (s2 - s1);
+                    return A * Math.exp(s1 * t) + B * Math.exp(s2 * t);
                 }
             });
         }
