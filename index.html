@@ -385,6 +385,20 @@
                         <input type="number" id="halfsinePulseDuration" value="50" step="1" min="1">
                     </div>
                 </div>
+                <div class="options-row" id="nonlinearOptions">
+                    <div class="checkbox-group" style="margin-top: 0; align-self: flex-end; padding-bottom: 10px;">
+                        <input type="checkbox" id="enableBilinear" onchange="updateNonlinearVisibility(); calculate();">
+                        <label for="enableBilinear">Enable Bilinear Stiffness</label>
+                    </div>
+                    <div class="form-group" id="gapGroup" style="display:none;">
+                        <label>Gap (mm)</label>
+                        <input type="number" id="bilinearGap" value="10" step="1" min="0.1" onchange="calculate();">
+                    </div>
+                    <div class="form-group" id="k2Group" style="display:none;">
+                        <label>Contact Stiffness k₂ (N/m)</label>
+                        <input type="number" id="bilinearK2" value="10000000" step="1000" min="0" onchange="calculate();">
+                    </div>
+                </div>
             </div>
 
             <div id="srs-options" style="display:none;">
@@ -743,6 +757,166 @@
             return { displacement: x, force: force };
         }
 
+        // Bilinear stiffness force calculation
+        // For |x| < gap: F = k1*x
+        // For |x| >= gap: F = k1*x + k2*(|x| - gap)*sign(x)
+        function bilinearStiffnessForce(x, k1, k2, gap) {
+            const absX = Math.abs(x);
+            if (absX < gap) {
+                return k1 * x;
+            } else {
+                const sign = x >= 0 ? 1 : -1;
+                return k1 * x + k2 * (absX - gap) * sign;
+            }
+        }
+
+        // Tangent stiffness for bilinear system (for Newton-Raphson iteration)
+        function bilinearTangentStiffness(x, k1, k2, gap) {
+            const absX = Math.abs(x);
+            if (absX < gap) {
+                return k1;
+            } else {
+                return k1 + k2;
+            }
+        }
+
+        // Nonlinear Newmark-beta integration with bilinear stiffness
+        function computeNonlinearResponse(system, time, forceFunction, k2, gap) {
+            const m = system.mass;
+            const k1 = system.stiffness;
+            const c = system.damping;
+            const dt = time[1] - time[0];
+            const n = time.length;
+
+            // Newmark-beta parameters (average acceleration)
+            const gamma = 0.5;
+            const beta = 0.25;
+
+            const x = new Array(n).fill(0);
+            const v = new Array(n).fill(0);
+            const a = new Array(n).fill(0);
+
+            // Generate force array
+            const force = time.map((t, i) => forceFunction(t, i));
+
+            // Initial acceleration (assuming zero initial displacement, linear region)
+            a[0] = (force[0] - bilinearStiffnessForce(x[0], k1, k2, gap)) / m;
+
+            // Newmark-beta constants
+            const a0 = 1 / (beta * dt * dt);
+            const a1 = gamma / (beta * dt);
+            const a2 = 1 / (beta * dt);
+            const a3 = 1 / (2 * beta) - 1;
+            const a4 = gamma / beta - 1;
+            const a5 = dt * (gamma / (2 * beta) - 1);
+
+            // Time stepping with Newton-Raphson iteration for nonlinearity
+            for (let i = 0; i < n - 1; i++) {
+                // Predictor (initial guess based on linear extrapolation)
+                let x_new = x[i] + dt * v[i] + 0.5 * dt * dt * a[i];
+
+                // Newton-Raphson iteration
+                const maxIter = 20;
+                const tol = 1e-10;
+
+                for (let iter = 0; iter < maxIter; iter++) {
+                    // Compute residual
+                    const fs = bilinearStiffnessForce(x_new, k1, k2, gap);
+                    const kt = bilinearTangentStiffness(x_new, k1, k2, gap);
+
+                    const v_new = a1 * (x_new - x[i]) - a4 * v[i] - a5 * a[i];
+                    const a_new = a0 * (x_new - x[i]) - a2 * v[i] - a3 * a[i];
+
+                    const residual = m * a_new + c * v_new + fs - force[i + 1];
+
+                    // Effective tangent stiffness
+                    const keff = a0 * m + a1 * c + kt;
+
+                    // Newton-Raphson update
+                    const dx = -residual / keff;
+                    x_new += dx;
+
+                    if (Math.abs(dx) < tol) break;
+                }
+
+                // Update state variables
+                x[i + 1] = x_new;
+                v[i + 1] = a1 * (x[i + 1] - x[i]) - a4 * v[i] - a5 * a[i];
+                a[i + 1] = a0 * (x[i + 1] - x[i]) - a2 * v[i] - a3 * a[i];
+            }
+
+            return { displacement: x, velocity: v, acceleration: a, force: force };
+        }
+
+        // Nonlinear Newmark-beta for free vibration with initial conditions
+        function computeNonlinearResponseFree(system, time, k2, gap, x0, v0) {
+            const m = system.mass;
+            const k1 = system.stiffness;
+            const c = system.damping;
+            const dt = time[1] - time[0];
+            const n = time.length;
+
+            // Newmark-beta parameters (average acceleration)
+            const gamma = 0.5;
+            const beta = 0.25;
+
+            const x = new Array(n).fill(0);
+            const v = new Array(n).fill(0);
+            const a = new Array(n).fill(0);
+
+            // Set initial conditions
+            x[0] = x0;
+            v[0] = v0;
+
+            // Initial acceleration from equation of motion (no external force)
+            a[0] = (-bilinearStiffnessForce(x[0], k1, k2, gap) - c * v[0]) / m;
+
+            // Newmark-beta constants
+            const a0 = 1 / (beta * dt * dt);
+            const a1 = gamma / (beta * dt);
+            const a2 = 1 / (beta * dt);
+            const a3 = 1 / (2 * beta) - 1;
+            const a4 = gamma / beta - 1;
+            const a5 = dt * (gamma / (2 * beta) - 1);
+
+            // Time stepping with Newton-Raphson iteration
+            for (let i = 0; i < n - 1; i++) {
+                // Predictor
+                let x_new = x[i] + dt * v[i] + 0.5 * dt * dt * a[i];
+
+                // Newton-Raphson iteration
+                const maxIter = 20;
+                const tol = 1e-10;
+
+                for (let iter = 0; iter < maxIter; iter++) {
+                    const fs = bilinearStiffnessForce(x_new, k1, k2, gap);
+                    const kt = bilinearTangentStiffness(x_new, k1, k2, gap);
+
+                    const v_new = a1 * (x_new - x[i]) - a4 * v[i] - a5 * a[i];
+                    const a_new = a0 * (x_new - x[i]) - a2 * v[i] - a3 * a[i];
+
+                    // Residual (no external force for free vibration)
+                    const residual = m * a_new + c * v_new + fs;
+
+                    // Effective tangent stiffness
+                    const keff = a0 * m + a1 * c + kt;
+
+                    // Newton-Raphson update
+                    const dx = -residual / keff;
+                    x_new += dx;
+
+                    if (Math.abs(dx) < tol) break;
+                }
+
+                // Update state variables
+                x[i + 1] = x_new;
+                v[i + 1] = a1 * (x[i + 1] - x[i]) - a4 * v[i] - a5 * a[i];
+                a[i + 1] = a0 * (x[i + 1] - x[i]) - a2 * v[i] - a3 * a[i];
+            }
+
+            return { displacement: x, velocity: v, acceleration: a };
+        }
+
         // Compute half-sine pulse response using Newmark-beta integration
         function computeHalfSineResponse(system, time, pulseDuration, forceAmplitude = 1) {
             const m = system.mass;
@@ -1035,6 +1209,12 @@
             }
 
             calculate();
+        }
+
+        function updateNonlinearVisibility() {
+            const enabled = document.getElementById('enableBilinear').checked;
+            document.getElementById('gapGroup').style.display = enabled ? 'block' : 'none';
+            document.getElementById('k2Group').style.display = enabled ? 'block' : 'none';
         }
 
         function updateTimeOptionsVisibility() {
@@ -1355,35 +1535,86 @@
                 const chirpStartFreq = parseFloat(document.getElementById('chirpStartFreq').value);
                 const chirpEndFreq = parseFloat(document.getElementById('chirpEndFreq').value);
 
+                // Check for bilinear stiffness
+                const bilinearEnabled = document.getElementById('enableBilinear').checked;
+                const bilinearGap = bilinearEnabled ? parseFloat(document.getElementById('bilinearGap').value) / 1000 : 0; // mm to m
+                const bilinearK2 = bilinearEnabled ? parseFloat(document.getElementById('bilinearK2').value) : 0;
+
                 switch (responseType) {
                     case 'impulse':
-                        displacement = computeImpulseResponse(system, time, amplitude);
-                        title = 'Impulse Response';
+                        if (bilinearEnabled) {
+                            // For impulse, we apply an impulsive force at t=0
+                            // This is approximated as a very short pulse with amplitude = impulse/dt
+                            const dt = time[1] - time[0];
+                            const forceFunc = (t, i) => i === 0 ? amplitude / dt : 0;
+                            const result = computeNonlinearResponse(system, time, forceFunc, bilinearK2, bilinearGap);
+                            displacement = result.displacement;
+                        } else {
+                            displacement = computeImpulseResponse(system, time, amplitude);
+                        }
+                        title = 'Impulse Response' + (bilinearEnabled ? ' (Bilinear)' : '');
                         subtitle = `Impulse = ${amplitude} N·s`;
                         break;
                     case 'step':
-                        displacement = computeStepResponse(system, time, amplitude);
-                        title = 'Step Response';
+                        if (bilinearEnabled) {
+                            const forceFunc = (t, i) => amplitude;
+                            const result = computeNonlinearResponse(system, time, forceFunc, bilinearK2, bilinearGap);
+                            displacement = result.displacement;
+                        } else {
+                            displacement = computeStepResponse(system, time, amplitude);
+                        }
+                        title = 'Step Response' + (bilinearEnabled ? ' (Bilinear)' : '');
                         subtitle = `F₀ = ${amplitude} N, Static deflection = ${(amplitude/system.stiffness * 1000).toFixed(3)} mm`;
                         break;
                     case 'harmonic':
-                        displacement = computeHarmonicResponse(system, time, excitationFreq, amplitude);
-                        title = `Harmonic Response`;
+                        if (bilinearEnabled) {
+                            const omega = 2 * Math.PI * excitationFreq;
+                            const forceFunc = (t, i) => amplitude * Math.sin(omega * t);
+                            const result = computeNonlinearResponse(system, time, forceFunc, bilinearK2, bilinearGap);
+                            displacement = result.displacement;
+                        } else {
+                            displacement = computeHarmonicResponse(system, time, excitationFreq, amplitude);
+                        }
+                        title = `Harmonic Response` + (bilinearEnabled ? ' (Bilinear)' : '');
                         const steadyAmp = amplitude / Math.sqrt(Math.pow(system.stiffness - system.mass * Math.pow(2*Math.PI*excitationFreq, 2), 2) + Math.pow(system.damping * 2*Math.PI*excitationFreq, 2));
                         subtitle = `f = ${excitationFreq} Hz (ω/ωn = ${freqRatio.toFixed(3)}), F₀ = ${amplitude} N, Xss = ${(steadyAmp * 1000).toFixed(3)} mm`;
                         break;
                     case 'ramp':
-                        const rampResult = computeRampResponse(system, time, rampTime, amplitude);
-                        displacement = rampResult.displacement;
-                        forceData = rampResult.force;
-                        title = 'Ramp Force Response';
+                        if (bilinearEnabled) {
+                            const forceFunc = (t, i) => {
+                                if (t < rampTime) {
+                                    return amplitude * (t / rampTime);
+                                } else {
+                                    return amplitude;
+                                }
+                            };
+                            const result = computeNonlinearResponse(system, time, forceFunc, bilinearK2, bilinearGap);
+                            displacement = result.displacement;
+                            forceData = result.force;
+                        } else {
+                            const rampResult = computeRampResponse(system, time, rampTime, amplitude);
+                            displacement = rampResult.displacement;
+                            forceData = rampResult.force;
+                        }
+                        title = 'Ramp Force Response' + (bilinearEnabled ? ' (Bilinear)' : '');
                         subtitle = `F_final = ${amplitude} N, Ramp time = ${rampTime} s, Static deflection = ${(amplitude/system.stiffness * 1000).toFixed(3)} mm`;
                         break;
                     case 'chirp':
-                        const chirpResult = computeChirpResponse(system, time, chirpStartFreq, chirpEndFreq, amplitude);
-                        displacement = chirpResult.displacement;
-                        forceData = chirpResult.force;
-                        title = 'Swept Sine (Chirp) Response';
+                        if (bilinearEnabled) {
+                            const k = (chirpEndFreq - chirpStartFreq) / duration; // chirp rate
+                            const forceFunc = (t, i) => {
+                                const instantFreq = chirpStartFreq + k * t;
+                                return amplitude * Math.sin(2 * Math.PI * (chirpStartFreq * t + 0.5 * k * t * t));
+                            };
+                            const result = computeNonlinearResponse(system, time, forceFunc, bilinearK2, bilinearGap);
+                            displacement = result.displacement;
+                            forceData = result.force;
+                        } else {
+                            const chirpResult = computeChirpResponse(system, time, chirpStartFreq, chirpEndFreq, amplitude);
+                            displacement = chirpResult.displacement;
+                            forceData = chirpResult.force;
+                        }
+                        title = 'Swept Sine (Chirp) Response' + (bilinearEnabled ? ' (Bilinear)' : '');
                         subtitle = `F₀ = ${amplitude} N, Freq: ${chirpStartFreq} → ${chirpEndFreq} Hz, fn = ${system.naturalFrequencyHz.toFixed(2)} Hz`;
                         break;
                     case 'halfsine':
@@ -1391,10 +1622,25 @@
                         const shockLevelG = amplitude; // amplitude is now in g's
                         const peakAccel = shockLevelG * 9.81; // convert to m/s²
                         const peakForce = system.mass * peakAccel; // F = ma
-                        const halfsineResult = computeHalfSineResponse(system, time, halfsinePulseDuration, peakForce);
-                        displacement = halfsineResult.displacement;
-                        forceData = halfsineResult.force;
-                        title = 'Half-Sine Pulse Response';
+
+                        if (bilinearEnabled) {
+                            const forceFunc = (t, i) => {
+                                if (t <= halfsinePulseDuration) {
+                                    return peakForce * Math.sin(Math.PI * t / halfsinePulseDuration);
+                                } else {
+                                    return 0;
+                                }
+                            };
+                            const result = computeNonlinearResponse(system, time, forceFunc, bilinearK2, bilinearGap);
+                            displacement = result.displacement;
+                            forceData = result.force;
+                        } else {
+                            const halfsineResult = computeHalfSineResponse(system, time, halfsinePulseDuration, peakForce);
+                            displacement = halfsineResult.displacement;
+                            forceData = halfsineResult.force;
+                        }
+
+                        title = 'Half-Sine Pulse Response' + (bilinearEnabled ? ' (Bilinear)' : '');
                         const pulsePeriod = 2 * halfsinePulseDuration;
                         const pulseFreq = 1 / pulsePeriod;
 
@@ -1412,10 +1658,28 @@
                         lastPulseFreq = { freq: pulseFreq, kDyn: kDyn, rp: rp };
                         break;
                     case 'free':
-                        displacement = computeFreeVibration(system, time, initialDisp, initialVel);
-                        title = 'Free Vibration';
+                        if (bilinearEnabled) {
+                            // For free vibration with bilinear stiffness, no external force
+                            // but we need to set initial conditions
+                            // The computeNonlinearResponse needs modification to accept initial conditions
+                            // For now, we'll approximate with a very short initial displacement
+                            const forceFunc = (t, i) => 0;
+                            // Apply initial displacement via initial force then release
+                            // This is approximate - true free vibration would need modified solver
+                            const result = computeNonlinearResponseFree(system, time, bilinearK2, bilinearGap, initialDisp, initialVel);
+                            displacement = result.displacement;
+                        } else {
+                            displacement = computeFreeVibration(system, time, initialDisp, initialVel);
+                        }
+                        title = 'Free Vibration' + (bilinearEnabled ? ' (Bilinear)' : '');
                         subtitle = `x₀ = ${initialDisp * 1000} mm, v₀ = ${initialVel} m/s`;
                         break;
+                }
+
+                // Add bilinear stiffness info to subtitle
+                if (bilinearEnabled) {
+                    const gapMm = bilinearGap * 1000;
+                    subtitle += ` | Gap = ±${gapMm.toFixed(1)} mm, k₂ = ${bilinearK2.toExponential(2)} N/m`;
                 }
 
                 // Get output type and compute appropriate response
@@ -1506,6 +1770,25 @@
                         type: 'scatter',
                         name: `Static deflection: ${staticDeflectionMm.toFixed(3)} mm`,
                         line: { color: '#e67e22', dash: 'dash', width: 2 }
+                    });
+                }
+
+                // Add gap limit lines for bilinear stiffness (only for displacement)
+                if (bilinearEnabled && outputType === 'displacement') {
+                    const gapMm = bilinearGap * 1000; // Convert to mm
+                    traces.push({
+                        x: [time[0], time[time.length-1]],
+                        y: [gapMm, gapMm],
+                        type: 'scatter',
+                        name: `Gap: ±${gapMm.toFixed(1)} mm`,
+                        line: { color: '#9b59b6', dash: 'dot', width: 2 }
+                    });
+                    traces.push({
+                        x: [time[0], time[time.length-1]],
+                        y: [-gapMm, -gapMm],
+                        type: 'scatter',
+                        showlegend: false,
+                        line: { color: '#9b59b6', dash: 'dot', width: 2 }
                     });
                 }
 
